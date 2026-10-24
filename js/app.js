@@ -6,6 +6,7 @@ import * as L from "./logic.js";
 import { $, $$, esc, D, ui, actions, confirmed, changes, inputs, hooks, TAGLINE, openModal, closeModal, cycle, sessionById, runSync, syncBadge, toast } from "./core.js";
 import { drawTimer, initTimer, wakeLock } from "./timer.js";
 import { viewDashboard, measureDue } from "./views/dashboard.js";
+import { planStatus } from "./views/payments.js";
 import { viewWorkout, onSetInput, updateBarTotal, refreshBarTotals, finishSession } from "./views/session.js";
 import { viewProgram } from "./views/program.js";
 import { viewMeasures, setMeasure } from "./views/measures.js";
@@ -33,7 +34,7 @@ function renderHeader() {
     ? `<div class="row" style="gap:8px;justify-content:flex-start;min-width:0"><button class="icon-btn" data-act="workout-back" aria-label="Indietro">‹</button><h1>Scheda ${esc(s.sheet)}</h1></div>
        <div class="row" style="gap:6px">${badge}<button class="icon-btn" data-act="session-menu" aria-label="Altro sulla sessione">⋯</button></div>`
     : `<div><h1>${esc(TITLES[ui.view] || "Harden")}</h1>${sub ? `<div class="hint">${esc(sub)}</div>` : ""}</div>
-       <div class="row" style="gap:6px">${badge}${ui.view === "settings" ? "" : `<button class="icon-btn" data-act="go" data-view="settings" aria-label="Impostazioni">⚙︎</button>`}</div>`}</div></div>`;
+       <div class="row" style="gap:6px">${badge}${ui.view === "settings" ? "" : `<button class="icon-btn ${d && planStatus(d)?.late ? "dot" : ""}" data-act="go" data-view="settings" aria-label="Impostazioni">⚙︎</button>`}</div>`}</div></div>`;
   document.body.classList.toggle("full", ui.view === "workout");
   $$(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === ui.view)));
   $(".tabs [data-view=measures]")?.classList.toggle("dot", !!(d && store.hasData() && measureDue(d)));

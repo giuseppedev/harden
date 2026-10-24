@@ -5,6 +5,7 @@ import * as L from "../logic.js";
 import { $, esc, D, ui, actions, confirmed, changes, inputs, toast, openModal, closeModal, render, renderHeader, go, deleteWithUndo, runSync, APP_VERSION } from "../core.js";
 import { platesOf, matchScore } from "./session.js";
 import { readJsonFile } from "./program.js";
+import { paymentsCard } from "./payments.js";
 
 export function viewSettings(d) {
   const cfg = gh.getConfig(), meta = gh.getMeta(), on = gh.isConfigured();
@@ -22,6 +23,7 @@ export function viewSettings(d) {
     ${bars.map((b) => `<li><span>${esc(b.name)}</span><span class="hint">${b.kg != null ? `${L.fmtNum(b.kg)} kg` : "peso da impostare"}</span></li>`).join("")}
     <li><span>Dischi</span><span class="hint">${platesOf().map(L.fmtNum).join(" · ")}</span></li></ul></section>
   <section class="card stack"><div class="row"><h2>Catalogo esercizi</h2><button class="mini" data-act="catalog-open">Apri</button></div><p class="hint">${exCount} esercizi · nome, distretto, regolazioni e bilanciere predefinito</p></section>
+  ${paymentsCard(d)}
   ${backupCard(true)}${footer()}`;
 }
 

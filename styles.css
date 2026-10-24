@@ -331,3 +331,7 @@ details.rep-sec { margin: 0; border-top: 1px solid var(--line); padding: 14px; }
 .variant-row { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; margin-top: 10px; }
 .sheet .name small.var { color: #555; font-weight: 500; font-style: italic; }
 textarea { resize: vertical; }
+.icon-btn.dot { position: relative; }
+.icon-btn.dot::after { content: ""; position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--rest); }
+.groups summary.plain { text-transform: none; }
+.banner.danger .btn { background: #fff; color: var(--danger); }

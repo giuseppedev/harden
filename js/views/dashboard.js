@@ -6,6 +6,7 @@ import { esc, D, ui, actions, go, cycle, byDate, lastDate } from "../core.js";
 import { sparkline } from "../charts.js";
 import { sessionRow, sessionMinutes, startSession, openSessionView } from "./session.js";
 import { openWeightForm, openMeasureForm } from "./measures.js";
+import { planStatus } from "./payments.js";
 
 /** Weight after 3 days, circumferences every 7 days, token expiry within 14 days. */
 export function reminders(d) {
@@ -15,6 +16,8 @@ export function reminders(d) {
   const ago = (n, last) => (last ? `${n} gg fa` : "mai");
   if (dw >= 3) out.push({ icon: "⚖︎", text: "Peso", small: ago(dw, lastW), act: "go-weight" });
   if (dm >= 7) out.push({ icon: "📏", text: "Circonferenze", small: ago(dm, lastM), act: "go-circ" });
+  const pay = planStatus(d);
+  if (pay?.late) out.push({ icon: "💶", text: `Rata ${pay.next} coaching`, small: `in ritardo di ${pay.late} gg`, act: "go-settings", warn: true });
   const exp = gh.getConfig().expiry;
   if (exp && gh.isConfigured()) {
     const left = -L.daysSince(exp);

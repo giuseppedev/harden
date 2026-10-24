@@ -1,11 +1,11 @@
 // Offline support: app files are served from the cache and refreshed in the background.
 // Bump VERSION whenever you upload new app files.
-const VERSION = "harden-2.1.0";
+const VERSION = "harden-2.2.0";
 const SHELL = [
   "./", "index.html", "styles.css", "manifest.webmanifest",
   "js/app.js", "js/core.js", "js/timer.js", "js/charts.js", "js/data.js", "js/logic.js", "js/github.js", "js/pdf.js",
   "js/views/dashboard.js", "js/views/session.js", "js/views/program.js", "js/views/measures.js",
-  "js/views/report.js", "js/views/logbook.js", "js/views/settings.js",
+  "js/views/report.js", "js/views/logbook.js", "js/views/settings.js", "js/views/payments.js",
   "vendor/pdf-lib.min.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
 ];

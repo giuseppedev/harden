@@ -5,7 +5,7 @@
 const DATA_KEY = "gymlog.data.v1";
 const DIRTY_KEY = "gymlog.dirty";
 
-export const COLLECTIONS = ["bars", "exercises", "cycles", "sessions", "weights", "measurements"];
+export const COLLECTIONS = ["bars", "exercises", "cycles", "sessions", "weights", "measurements", "plans", "payments"];
 
 export const now = () => new Date().toISOString();
 
@@ -25,6 +25,8 @@ export function emptyData() {
     sessions: [],
     weights: [],
     measurements: [],
+    plans: [],
+    payments: [],
   };
 }
 
