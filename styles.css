@@ -206,3 +206,53 @@ details p b { color: var(--fg); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 .vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 .tagline { font-size: 12px; color: var(--muted); font-style: italic; letter-spacing: .01em; }
+/* Trend chart and measurement history */
+.trend { width: 100%; height: auto; display: block; }
+.trend .grid { stroke: var(--line); stroke-width: 1; }
+.trend .axis { font-family: var(--mono); font-size: 9px; fill: var(--muted); }
+.trend .line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.trend .area { fill: var(--accent-soft); opacity: .7; }
+.trend .dot { fill: var(--accent); }
+.trend .dot.last { fill: var(--surface); stroke: var(--accent); stroke-width: 2.5; }
+.nav-row { display: grid; grid-template-columns: 44px 1fr 44px; gap: 8px; align-items: center; }
+.nav-row .icon-btn { width: 44px; height: 44px; font-size: 22px; }
+.nav-row .icon-btn:disabled { opacity: .35; }
+.nav-date { text-align: center; display: flex; flex-direction: column; }
+.nav-date b { font-family: var(--display); font-size: 20px; }
+.tbl tr.tap { cursor: pointer; }
+.tbl tr.tap:active td { background: var(--accent-soft); }
+.tbl tr.editing td { background: var(--accent-soft); }
+/* v1.4: granularity switch, chart summary, grouped lists, PR, extra sets, reminders */
+.gran { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; background: var(--bg); border-radius: 10px; padding: 3px; }
+.gran button { border: 0; background: transparent; border-radius: 8px; padding: 7px 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+.gran button.sel { background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
+.chart .nav-date b { font-size: 16px; }
+.chart-sum { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.chart-sum b { color: var(--fg); font-family: var(--mono); font-weight: 700; }
+.groups { display: flex; flex-direction: column; gap: 6px; }
+.groups details { margin: 0; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; }
+.groups summary { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-block: 10px; color: var(--fg); list-style: none; text-transform: capitalize; }
+.groups summary::-webkit-details-marker { display: none; }
+.groups summary::after { content: "›"; color: var(--muted); transition: transform .15s; }
+.groups details[open] summary::after { transform: rotate(90deg); }
+.groups summary .hint { text-transform: none; margin-left: auto; }
+.groups details .tbl-wrap, .groups details .list { margin-bottom: 8px; }
+.list li.tap { cursor: pointer; }
+.set.pr .check { background: var(--rest); border-color: var(--rest); }
+.pr-tag { font-family: var(--mono); font-size: 10px; color: #fff; background: var(--rest); border-radius: 4px; padding: 2px 3px; }
+.tgt.extra { font-style: italic; }
+.extra-btns { display: flex; gap: 8px; margin-top: 8px; }
+.tabs button.dot { position: relative; }
+.tabs button.dot::after { content: ""; position: absolute; top: 8px; right: calc(50% - 26px); width: 7px; height: 7px; border-radius: 50%; background: var(--rest); }
+.banner.danger { background: var(--danger); color: #fff; }
+.banner .btn.small { flex: none; }
+/* v1.5: machine setup, scale used for weighing */
+.setup { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; background: var(--accent-soft); border-radius: 8px; padding: 4px 4px 4px 10px; }
+.setup span { font-size: 12px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.setup input { background: var(--surface); }
+.seg button.alt { border-color: var(--rest); background: var(--rest-soft); color: var(--rest); }
+.scale-tag { display: inline-block; font-size: 10px; font-weight: 700; color: var(--rest); background: var(--rest-soft); border-radius: 4px; padding: 1px 5px; vertical-align: middle; }
+.tbl .num.alt { color: var(--rest); font-weight: 700; }
+.trend .dot.alt { fill: var(--rest); }
+.trend .dot.last.alt { fill: var(--surface); stroke: var(--rest); }
+.alt-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--rest); vertical-align: middle; }

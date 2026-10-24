@@ -1,6 +1,6 @@
 // Offline support: app files are served from the cache and refreshed in the background.
 // Bump VERSION whenever you upload new app files.
-const VERSION = "harden-1.2.0";
+const VERSION = "harden-1.5.0";
 const SHELL = [
   "./", "index.html", "styles.css", "manifest.webmanifest",
   "js/app.js", "js/data.js", "js/logic.js", "js/github.js", "js/pdf.js",

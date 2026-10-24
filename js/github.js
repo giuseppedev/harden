@@ -111,7 +111,8 @@ export function sync(message = "chore: sync pending changes") {
       const needsPush = !remote || !store.sameContent(merged, remote.data);
       try {
         let sha = remote?.sha;
-        if (needsPush) sha = await putRemote(merged, remote?.sha, message);
+        const device = getConfig().device;
+        if (needsPush) sha = await putRemote(merged, remote?.sha, device ? `${message}\n\nDevice: ${device}` : message);
         // Keep anything edited on this device while the request was running.
         const latest = store.get();
         const final = latest ? store.merge(latest, merged) : merged;

@@ -139,9 +139,23 @@ export function historyFor(d, exerciseId, { before = null } = {}) {
   }
   return out.sort((a, b) => (sessionKey(a.session) > sessionKey(b.session) ? -1 : 1));
 }
+/** Extra sets added beyond the coach's targets sit after the planned ones. */
+export function extraIdx(entry, blocks, w) {
+  const n = targetsFor(blocks, w).length, out = [];
+  for (let i = n; i < n + (entry?.extra || 0); i++) out.push(i);
+  return out;
+}
 export function countedSets(item) {
-  const idx = countedIdx(item.blocks, item.session.week);
+  const idx = [...countedIdx(item.blocks, item.session.week), ...extraIdx(item.entry, item.blocks, item.session.week)];
   return idx.map((i) => item.entry.sets?.[i]).filter((s) => s && s.done);
+}
+/** Heaviest load ever lifted on an exercise before a given session (warm-ups excluded). */
+export function bestLoadBefore(d, exerciseId, session) {
+  let best = null;
+  for (const h of historyFor(d, exerciseId, { before: session })) {
+    for (const st of countedSets(h)) if (st.load != null && (best == null || st.load > best)) best = st.load;
+  }
+  return best;
 }
 export function bestSet(sets) {
   return (sets || []).reduce((b, s) => (!b || (s.load ?? 0) > (b.load ?? 0) || ((s.load ?? 0) === (b.load ?? 0) && (s.reps ?? 0) > (b.reps ?? 0)) ? s : b), null);
@@ -168,7 +182,7 @@ export function logbookRows(d, cycle, sheet) {
         if (!e) continue;
         const r = resolveSlot(cycle, slot, s);
         if (r.exerciseId !== exId) continue;
-        const sets = logbookIdx(r.blocks, s.week).map((i) => e.sets?.[i]).filter((x) => x && x.done);
+        const sets = [...logbookIdx(r.blocks, s.week), ...extraIdx(e, r.blocks, s.week)].map((i) => e.sets?.[i]).filter((x) => x && x.done);
         if (sets.length) weeks[s.week] = sets;
       }
       rows.push({ slotId: slot.id, exerciseId: exId, isSub: exId !== slot.exerciseId, originalId: slot.exerciseId, weeks });
@@ -246,3 +260,65 @@ export function reportData(d, cycleIds) {
 
   return { cycles, sessionsDone, planned, compare, volume, history, exerciseIds: exIds };
 }
+
+/* ---------- Time buckets for charts ---------- */
+export const GRANULARITIES = [
+  { k: "D", name: "Giorno", window: 30 },
+  { k: "W", name: "Settimana", window: 26 },
+  { k: "M", name: "Mese", window: 12 },
+  { k: "Q", name: "Trimestre", window: 8 },
+  { k: "Y", name: "Anno", window: 6 },
+];
+/** First day (ISO date) of the bucket that contains `date`. Weeks start on Monday. */
+export function bucketStart(date, g) {
+  const d = parseISO(date);
+  if (g === "D") return date;
+  if (g === "W") { const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return toISO(d); }
+  if (g === "M") return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`;
+  if (g === "Q") return `${d.getFullYear()}-${pad(Math.floor(d.getMonth() / 3) * 3 + 1)}-01`;
+  return `${d.getFullYear()}-01-01`;
+}
+export function shiftBucket(start, g, n) {
+  const d = parseISO(start);
+  if (g === "D") d.setDate(d.getDate() + n);
+  else if (g === "W") d.setDate(d.getDate() + 7 * n);
+  else if (g === "M") d.setMonth(d.getMonth() + n);
+  else if (g === "Q") d.setMonth(d.getMonth() + 3 * n);
+  else d.setFullYear(d.getFullYear() + n);
+  return toISO(d);
+}
+export function bucketLabel(start, g, { short = false } = {}) {
+  const d = parseISO(start);
+  if (g === "D") return fmtDate(start, { weekday: false });
+  if (g === "W") return `${short ? "" : "sett. "}${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  if (g === "M") return `${MONTHS[d.getMonth()]} ${short ? String(d.getFullYear()).slice(2) : d.getFullYear()}`;
+  if (g === "Q") return `T${Math.floor(d.getMonth() / 3) + 1} ${short ? String(d.getFullYear()).slice(2) : d.getFullYear()}`;
+  return String(d.getFullYear());
+}
+/**
+ * Average a dated series into buckets and return one window of `window` buckets.
+ * `offset` 0 is the window ending at the newest bucket; 1 is the window before it, and so on.
+ */
+export function bucketSeries(points, g, offset = 0) {
+  const gran = GRANULARITIES.find((x) => x.k === g) || GRANULARITIES[0];
+  if (!points.length) return { buckets: [], hasOlder: false, hasNewer: false };
+  const sums = new Map();
+  for (const p of points) {
+    const k = bucketStart(p.date, g);
+    const s = sums.get(k) || { sum: 0, n: 0, min: Infinity, max: -Infinity, alt: 0 };
+    s.sum += p.v; s.n++; s.min = Math.min(s.min, p.v); s.max = Math.max(s.max, p.v); if (p.alt) s.alt++;
+    sums.set(k, s);
+  }
+  const latest = points.reduce((a, p) => (p.date > a ? p.date : a), points[0].date);
+  const newest = bucketStart(latest > todayISO() ? latest : todayISO(), g);
+  const oldest = bucketStart(points.reduce((a, p) => (p.date < a ? p.date : a), points[0].date), g);
+  const end = shiftBucket(newest, g, -offset * gran.window);
+  const buckets = [];
+  for (let i = gran.window - 1; i >= 0; i--) {
+    const start = shiftBucket(end, g, -i);
+    const s = sums.get(start);
+    buckets.push({ start, label: bucketLabel(start, g), short: bucketLabel(start, g, { short: true }), v: s ? s.sum / s.n : null, n: s?.n || 0, min: s?.min, max: s?.max, alt: s?.alt || 0 });
+  }
+  return { buckets, hasOlder: buckets[0].start > oldest, hasNewer: offset > 0 };
+}
+export function daysSince(date) { return date ? daysBetween(date, todayISO()) : Infinity; }

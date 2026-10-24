@@ -40,6 +40,14 @@ Il token può leggere e scrivere solo quel repository. Resta salvato solo sul te
 - Sincronizza anche quando salvi peso o misure, quando esci dall'app con modifiche in sospeso e quando la riapri.
 - Se modifichi da due dispositivi, le modifiche vengono unite elemento per elemento: vince la versione più recente.
 
+## Promemoria
+
+- **Peso:** in Home compare un avviso se non lo registri da 3 giorni.
+- **Circonferenze:** avviso ogni settimana (7 giorni dall'ultima misurazione).
+- **Token:** inserisci la scadenza nelle impostazioni; l'app ti avvisa 14 giorni prima.
+
+Nelle impostazioni puoi anche dare un **nome al dispositivo**: compare in ogni commit come `Device: …`, così riconosci subito da dove arriva una modifica.
+
 ## Aggiornare l'app
 
 Quando carichi una nuova versione dei file, cambia il numero in `VERSION` dentro `sw.js`. L'iPhone scarica l'aggiornamento in background e lo usa dall'apertura successiva.

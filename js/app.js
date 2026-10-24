@@ -3,7 +3,7 @@ import * as store from "./data.js";
 import * as gh from "./github.js";
 import * as L from "./logic.js";
 
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.5.0";
 const TAGLINE = "every set, on record.";
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -18,6 +18,9 @@ const ui = {
   rep: { cycles: null, sections: new Set(["sum", "cmp", "vol", "meas", "ex"]), ex: null },
   measureActive: "neck",
   measureEdit: null,
+  measureIdx: null,
+  weightEdit: null,
+  charts: {},
   weightShowAll: false,
   catalogQuery: "",
   syncState: "idle", // idle | running | error
@@ -141,7 +144,8 @@ function renderHeader() {
     ${showCycle && cycles.length ? `<label class="label" for="cycleSel">Ciclo
       <select id="cycleSel" data-act="cycle">${cycles.slice().reverse().map((x) => `<option value="${x.id}" ${x.id === c.id ? "selected" : ""}>Ciclo ${x.number} · ${esc(L.fmtRange(x.startDate, L.cycleEnd(x)))} · ${x.closed ? "chiuso" : "in corso"}</option>`).join("")}</select></label>` : ""}
   </div>`;
-  $$(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === ui.view || (ui.view === "settings" && false))));
+  $$(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === ui.view)));
+  $(".tabs [data-view=measures]")?.classList.toggle("dot", !!(d && store.hasData() && measureDue(d)));
 }
 
 function render() {
@@ -159,6 +163,7 @@ function render() {
   if (!store.hasData() && ui.view !== "settings") { v.innerHTML = viewWelcome(); return; }
   const views = { home: viewHome, workout: viewWorkout, logbook: viewLogbook, measures: viewMeasures, report: viewReport, settings: viewSettings };
   v.innerHTML = (views[ui.view] || viewHome)(d);
+  if (ui.view === "workout") refreshBarTotals();
   if (ui.view === "workout") wakeLock(true); else wakeLock(false);
 }
 
@@ -193,6 +198,7 @@ function viewHome(d) {
     return `<div class="wk"><i><b style="width:${(n / letters.length) * 100}%"></b></i>S${i + 1} · ${n}/${letters.length}</div>`;
   }).join("");
   return `
+  ${reminders(d).map((r) => `<div class="banner ${r.cls || ""} row"><span>${esc(r.text)}</span>${r.act ? `<button class="btn small" data-act="${r.act}" ${r.view ? `data-view="${r.view}"` : ""}>${esc(r.btn)}</button>` : ""}</div>`).join("")}
   ${open ? `<div class="banner info row"><span>Sessione in corso: scheda ${esc(open.sheet)} · sett. ${open.week}</span><button class="btn small" data-act="open-session" data-id="${open.id}">Riprendi</button></div>` : ""}
   ${c.closed ? `<div class="banner">Ciclo ${c.number} chiuso. Puoi ancora correggere, aggiungere o eliminare le sue sessioni.</div>` : ""}
   ${!c.closed ? `<section class="card next stack"><div class="label">Prossima scheda</div>
@@ -211,6 +217,24 @@ function viewHome(d) {
   </section>
   <button class="btn ghost" data-act="past-session">+ Inserisci sessione passata</button>`;
 }
+
+/* ---------- Reminders: weight after 3 days, circumferences every week, token expiry ---------- */
+function reminders(d) {
+  const out = [];
+  const lastW = store.live(d.weights).reduce((a, w) => (w.date > a ? w.date : a), "");
+  const lastM = store.live(d.measurements).reduce((a, m) => (m.date > a ? m.date : a), "");
+  const dw = L.daysSince(lastW), dm = L.daysSince(lastM);
+  if (dw >= 3) out.push({ text: lastW ? `Non registri il peso da ${dw} giorni.` : "Non hai ancora registrato il peso.", act: "go", view: "measures", btn: "Registra" });
+  if (dm >= 7) out.push({ text: lastM ? `Ultime circonferenze ${dm} giorni fa: è ora di misurarle.` : "Non hai ancora preso le circonferenze.", act: "go", view: "measures", btn: "Misura" });
+  const exp = gh.getConfig().expiry;
+  if (exp && gh.isConfigured()) {
+    const left = -L.daysSince(exp);
+    if (left < 0) out.push({ cls: "danger", text: "Il token GitHub è scaduto: la sincronizzazione è ferma. Rigeneralo e incollalo nelle impostazioni.", act: "go", view: "settings", btn: "Apri" });
+    else if (left <= 14) out.push({ text: `Il token GitHub scade tra ${left} giorni (${L.fmtDate(exp, { weekday: false })}). Rigeneralo per tempo.`, act: "go", view: "settings", btn: "Apri" });
+  }
+  return out;
+}
+const measureDue = (d) => L.daysSince(store.live(d.weights).reduce((a, w) => (w.date > a ? w.date : a), "")) >= 3 || L.daysSince(store.live(d.measurements).reduce((a, m) => (m.date > a ? m.date : a), "")) >= 7;
 
 /* ---------- Session ---------- */
 function prevEntryFor(d, session, exerciseId) {
@@ -258,6 +282,8 @@ function exerciseCard(d, c, s, slot) {
   const chips = hist.length
     ? hist.map((h) => `<span><b>C${h.cycle.number} S${h.session.week}:</b> ${L.countedSets(h).map(L.fmtSet).join(", ")}</span>`).join("")
     : `<span>Mai fatto prima</span>`;
+  const best = L.bestLoadBefore(d, r.exerciseId, s);
+  const isPR = (st, role) => !!st?.done && role !== "warm" && best != null && st.load != null && st.load > best;
   let k = 0;
   const blocks = r.blocks.map((b, bi) => {
     const items = targets.filter((t) => t.block === bi);
@@ -270,19 +296,22 @@ function exerciseCard(d, c, s, slot) {
       const reps = saved?.reps ?? (L.isNumericReps(t.reps) ? t.reps : pv?.reps ?? "");
       const load = saved?.load ?? pv?.load ?? "";
       const role = t.role === "warm" ? "avv " : t.role === "mav" ? "MAV " : "";
-      return `<div class="set ${saved?.done ? "done" : ""}" data-slot="${slot.id}" data-k="${i}">
-        <span class="n">${i + 1}</span><span class="tgt ${t.role}">${role}${esc(t.reps)}</span>
-        <label class="field"><input data-f="reps" inputmode="numeric" value="${esc(reps)}" placeholder="–" aria-label="Ripetizioni serie ${i + 1}"><em>rip</em></label>
-        <label class="field"><input data-f="load" inputmode="decimal" value="${esc(L.fmtNum(load))}" placeholder="–" aria-label="Carico serie ${i + 1}"><em>kg</em></label>
-        <button class="check" data-act="check" ${t.role === "mav" ? 'data-mav="1"' : ""} aria-label="Serie ${i + 1} fatta" aria-pressed="${!!saved?.done}">✓</button></div>`;
+      return setRow(slot.id, i, `${role}${t.reps}`, t.role, saved, reps, load, isPR(saved, t.role));
     }).join("")}</div>`;
   }).join("");
+  const extra = entry?.extra || 0;
+  const extraRows = Array.from({ length: extra }, (_, j) => {
+    const i = targets.length + j, saved = entry?.sets?.[i];
+    const pv = entry?.sets?.[i - 1] || prevLast;
+    return setRow(slot.id, i, "extra", "extra", saved, saved?.reps ?? pv?.reps ?? "", saved?.load ?? pv?.load ?? "", isPR(saved, "extra"));
+  }).join("");
+  const extraHtml = `<div class="block">${extra ? `<span class="label">Serie extra</span>${extraRows}` : ""}
+    <div class="extra-btns"><button class="mini" data-act="add-set" data-slot="${slot.id}">+ serie</button>${extra ? `<button class="mini danger" data-act="remove-set" data-slot="${slot.id}">− serie</button>` : ""}</div></div>`;
   const barId = entry?.barId ?? lastBarFor(d, r.exerciseId);
   const bars = store.live(d.bars);
-  const firstLoad = L.parseNum(entry?.sets?.find(Boolean)?.load ?? prevRaw.find(Boolean)?.load);
   const bar = L.barOf(d, barId);
   const barHtml = ex.usesBar ? `<select data-act="bar" data-slot="${slot.id}" aria-label="Bilanciere"><option value="">Nessun bilanciere</option>${bars.map((b) => `<option value="${b.id}" ${b.id === barId ? "selected" : ""}>${esc(b.name)}${b.kg != null ? ` · ${L.fmtNum(b.kg)} kg` : ""}</option>`).join("")}</select>
-    <div class="total" data-total="${slot.id}">${bar?.kg != null && firstLoad != null ? `Dischi + bilanciere: ${L.fmtNum(firstLoad + bar.kg)} kg` : bar ? "Peso del bilanciere non impostato" : ""}</div>` : "";
+    <div class="total" data-total="${slot.id}"></div>` : "";
   const prevNote = !entry?.note && prev?.entry.note ? `Ultima nota: ${prev.entry.note}` : "Le tue note";
   const sub = r.substitution ? `<div class="subtag">⇄ Sostituisce: ${esc(L.exName(d, slot.exerciseId))} · ${r.substitution === "permanent" ? "definitiva" : "solo oggi"}<button data-act="restore" data-slot="${slot.id}">Ripristina originale</button></div>` : "";
   const coach = !r.substitution ? [
@@ -300,9 +329,20 @@ function exerciseCard(d, c, s, slot) {
     ${sub}
     <div class="hist">${chips}<button data-act="history" data-ex="${r.exerciseId}">Storico ›</button></div>
     ${blocks || `<p class="hint" style="margin-top:10px">Nessuna serie prevista questa settimana.</p>`}
-    <div class="extras">${barHtml}<input class="full" type="text" data-act="note" data-slot="${slot.id}" value="${esc(entry?.note || "")}" placeholder="${esc(prevNote)}" aria-label="Note"></div>
+    ${extraHtml}
+    <div class="extras">${barHtml}
+      <label class="setup full" for="setup-${slot.id}"><span>⚙︎ Regolazioni</span><input id="setup-${slot.id}" type="text" data-act="setup" data-ex="${r.exerciseId}" value="${esc(ex.setup || "")}" placeholder="es. schienale tacca 3, sellino 4" aria-label="Regolazioni della macchina"></label>
+      <input class="full" type="text" data-act="note" data-slot="${slot.id}" value="${esc(entry?.note || "")}" placeholder="${esc(prevNote)}" aria-label="Note di oggi"></div>
     ${coach ? `<details><summary>Note del coach e video</summary>${coach}</details>` : ""}
   </article>`;
+}
+
+function setRow(slotId, i, target, role, saved, reps, load, pr) {
+  return `<div class="set ${saved?.done ? "done" : ""} ${pr ? "pr" : ""}" data-slot="${slotId}" data-k="${i}">
+    <span class="n">${pr ? '<b class="pr-tag">PR</b>' : i + 1}</span><span class="tgt ${role}">${esc(target)}</span>
+    <label class="field"><input data-f="reps" inputmode="numeric" value="${esc(reps)}" placeholder="–" aria-label="Ripetizioni serie ${i + 1}"><em>rip</em></label>
+    <label class="field"><input data-f="load" inputmode="decimal" value="${esc(L.fmtNum(load))}" placeholder="–" aria-label="Carico serie ${i + 1}"><em>kg</em></label>
+    <button class="check" data-act="check" ${role === "mav" ? 'data-mav="1"' : ""} ${role === "warm" ? 'data-warm="1"' : ""} aria-label="Serie ${i + 1} fatta" aria-pressed="${!!saved?.done}">✓</button></div>`;
 }
 
 function ensureEntry(d, s, slot) {
@@ -349,28 +389,40 @@ function onCheck(btn) {
   row.classList.toggle("done", done);
   btn.setAttribute("aria-pressed", String(done));
   renderHeader();
-  if (!done) return;
   const slot = slotOf(s, slotId);
   const r = L.resolveSlot(cycleOfSession(s), slot, sessionById(s.id));
+  const best = L.bestLoadBefore(D(), r.exerciseId, sessionById(s.id));
+  const pr = done && !btn.dataset.warm && best != null && values.load != null && values.load > best;
+  row.classList.toggle("pr", pr);
+  $(".n", row).innerHTML = pr ? '<b class="pr-tag">PR</b>' : String(k + 1);
+  if (!done) return;
+  if (pr) toast(`Nuovo record su ${L.exName(D(), r.exerciseId)}: ${L.fmtNum(values.load)} kg (prima ${L.fmtNum(best)} kg)`, { ms: 3500 });
   startTimer(slot.rest, L.exName(D(), r.exerciseId));
   if (btn.dataset.mav && values.load != null) {
     const next = row.closest(".block").nextElementSibling;
     if (next?.classList.contains("block")) {
       $$(".set:not(.done) [data-f=load]", next).forEach((inp) => { inp.value = L.fmtNum(values.load); });
       toast(`Serie di lavoro precompilate con il carico MAV: ${L.fmtNum(values.load)} kg`);
+      updateBarTotal(slotId);
     }
   }
 }
 
+function barTotalText(bar, loads) {
+  if (!bar) return "";
+  if (bar.kg == null) return "Imposta il peso di questo bilanciere in ⚙︎ → Bilancieri";
+  const max = Math.max(...loads.filter((x) => x != null));
+  if (!Number.isFinite(max)) return `Bilanciere ${L.fmtNum(bar.kg)} kg: inserisci i dischi per vedere il totale`;
+  return `Dischi + bilanciere: ${L.fmtNum(max + bar.kg)} kg (serie più pesante)`;
+}
 function updateBarTotal(slotId) {
   const el = $(`[data-total="${slotId}"]`);
   if (!el) return;
   const sel = $(`select[data-act="bar"][data-slot="${slotId}"]`);
-  const bar = L.barOf(D(), sel?.value);
-  const first = $(`[data-card="${slotId}"] [data-f=load]`);
-  const load = L.parseNum(first?.value);
-  el.textContent = bar?.kg != null && load != null ? `Dischi + bilanciere: ${L.fmtNum(load + bar.kg)} kg` : bar ? "Peso del bilanciere non impostato" : "";
+  const loads = $$(`[data-card="${slotId}"] [data-f=load]`).map((i) => L.parseNum(i.value));
+  el.textContent = barTotalText(L.barOf(D(), sel?.value), loads);
 }
+const refreshBarTotals = () => $$("[data-total]").forEach((el) => updateBarTotal(el.dataset.total));
 
 async function startSession(sheet, week, date) {
   const d = D(), c = cycle();
@@ -570,34 +622,128 @@ function bodySvg() {
   </svg>`;
 }
 
+/* ---------- Charts: averages per day / week / month / quarter / year, with navigation back in time ---------- */
+const chartData = {};
+
+function chartBlock(id, points, unit, defaultGran, { table = false } = {}) {
+  chartData[id] = { points, unit, table };
+  ui.charts[id] ??= { g: defaultGran, off: 0 };
+  return `<div class="chart stack" data-chart="${id}">${chartInner(id)}</div>`;
+}
+
+function chartInner(id) {
+  const { points, unit, table } = chartData[id];
+  const st = ui.charts[id];
+  const r = L.bucketSeries(points, st.g, st.off);
+  const seg = `<div class="gran" role="group" aria-label="Raggruppa per">${L.GRANULARITIES.map((g) => `<button class="${g.k === st.g ? "sel" : ""}" data-act="chart-g" data-chart="${id}" data-g="${g.k}" aria-pressed="${g.k === st.g}">${g.name}</button>`).join("")}</div>`;
+  if (!r.buckets.length) return seg + `<p class="hint">Nessun dato.</p>`;
+  const nav = `<div class="nav-row"><button class="icon-btn" data-act="chart-pan" data-chart="${id}" data-dir="1" ${r.hasOlder ? "" : "disabled"} aria-label="Periodo precedente">‹</button>
+    <div class="nav-date"><b>${esc(r.buckets[0].label)} – ${esc(r.buckets[r.buckets.length - 1].label)}</b><span class="hint">${st.off ? `${st.off} ${st.off === 1 ? "periodo" : "periodi"} fa` : "periodo più recente"}</span></div>
+    <button class="icon-btn" data-act="chart-pan" data-chart="${id}" data-dir="-1" ${r.hasNewer ? "" : "disabled"} aria-label="Periodo successivo">›</button></div>`;
+  const filled = r.buckets.map((b, i) => ({ ...b, i })).filter((b) => b.v != null);
+  if (!filled.length) return seg + nav + `<p class="hint empty">Nessun valore in questo periodo.</p>`;
+  const W = 320, H = 140, pl = 36, pr = 10, pt = 12, pb = 24;
+  let lo = Math.min(...filled.map((b) => b.v)), hi = Math.max(...filled.map((b) => b.v));
+  if (hi - lo < 1) { const m = (hi + lo) / 2; lo = m - 0.5; hi = m + 0.5; }
+  const pad = (hi - lo) * 0.12; lo -= pad; hi += pad;
+  const n = r.buckets.length;
+  const x = (i) => pl + (n === 1 ? 0.5 : i / (n - 1)) * (W - pl - pr);
+  const y = (v) => pt + (1 - (v - lo) / (hi - lo)) * (H - pt - pb);
+  const ticks = [lo + pad, (lo + hi) / 2, hi - pad];
+  const path = filled.map((b, j) => `${j ? "L" : "M"}${x(b.i).toFixed(1)} ${y(b.v).toFixed(1)}`).join(" ");
+  const area = filled.length > 1 ? `${path} L${x(filled[filled.length - 1].i).toFixed(1)} ${H - pb} L${x(filled[0].i).toFixed(1)} ${H - pb} Z` : "";
+  const lastB = filled[filled.length - 1];
+  const labels = [0, Math.floor((n - 1) / 2), n - 1].filter((v, i, a) => a.indexOf(v) === i);
+  const svg = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" aria-label="Andamento in ${unit}">
+    ${ticks.map((t) => `<line class="grid" x1="${pl}" x2="${W - pr}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}"/><text class="axis" x="${pl - 4}" y="${(y(t) + 3).toFixed(1)}" text-anchor="end">${L.fmtNum(Math.round(t * 10) / 10)}</text>`).join("")}
+    ${area ? `<path class="area" d="${area}"/>` : ""}<path class="line" d="${path}"/>
+    <circle class="dot last ${lastB.alt ? "alt" : ""}" cx="${x(lastB.i).toFixed(1)}" cy="${y(lastB.v).toFixed(1)}" r="4"/>
+    ${filled.map((b) => `<circle class="dot ${b.alt ? "alt" : ""}" cx="${x(b.i).toFixed(1)}" cy="${y(b.v).toFixed(1)}" r="${b.alt ? 3.4 : 2.4}"><title>${esc(b.label)}: ${L.fmtNum(Math.round(b.v * 10) / 10)} ${unit}${b.alt ? " (altra bilancia)" : ""}</title></circle>`).join("")}
+    ${labels.map((i) => `<text class="axis" x="${x(i).toFixed(1)}" y="${H - 7}" text-anchor="${i === 0 ? "start" : i === n - 1 ? "end" : "middle"}">${esc(r.buckets[i].short)}</text>`).join("")}
+  </svg>`;
+  const vals = filled.map((b) => b.v), avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const round = (v) => L.fmtNum(Math.round(v * 10) / 10);
+  const summary = `<div class="chart-sum"><span>Media <b>${round(avg)}</b></span><span>Min <b>${round(Math.min(...vals))}</b></span><span>Max <b>${round(Math.max(...vals))}</b></span>${filled.length > 1 ? `<span>Variazione <b>${L.fmtDelta(Math.round(lastB.v * 10) / 10, Math.round(filled[0].v * 10) / 10)}</b></span>` : ""}</div>`;
+  const altNote = filled.some((b) => b.alt) ? `<p class="hint"><span class="alt-dot"></span> Punti arancioni: ${st.g === "D" ? "pesata" : "periodo con almeno una pesata"} su un'altra bilancia, può esserci uno scarto.</p>` : "";
+  const note = (st.g === "D" ? "" : `<p class="hint">Ogni punto è la media del periodo.</p>`) + altNote;
+  const tbl = table ? `<div class="tbl-wrap"><table class="tbl"><tr><th>Periodo</th><th class="num">${unit}</th><th class="num">vs prec.</th><th class="num">valori</th></tr>
+    ${filled.slice().reverse().map((b, j, a) => `<tr><td>${esc(b.label)}${b.alt ? ' <span class="scale-tag">altra bil.</span>' : ""}</td><td class="num">${round(b.v)}</td><td class="num delta">${a[j + 1] ? L.fmtDelta(Math.round(b.v * 10) / 10, Math.round(a[j + 1].v * 10) / 10) : ""}</td><td class="num">${b.n}</td></tr>`).join("")}</table></div>` : "";
+  return seg + nav + svg + summary + note + tbl;
+}
+
+function rerenderChart(id) {
+  const el = $(`[data-chart="${id}"]`);
+  if (el && chartData[id]) el.innerHTML = chartInner(id);
+}
+
+const MONTH_NAMES = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+/** Group dated records newest first under a key (month or year), for collapsible lists. */
+function groupBy(items, keyFn) {
+  const groups = [];
+  for (const it of items) {
+    const k = keyFn(it);
+    let g = groups[groups.length - 1];
+    if (!g || g.key !== k) { g = { key: k, items: [] }; groups.push(g); }
+    g.items.push(it);
+  }
+  return groups;
+}
+
 function viewMeasures(d) {
   const ws = store.live(d.weights).sort((a, b) => (a.date > b.date ? 1 : -1));
   const ms = store.live(d.measurements).sort((a, b) => (a.date > b.date ? 1 : -1));
   const wl = ws[ws.length - 1];
   const wWeek = wl ? ws.find((w) => w.date >= L.addDays(wl.date, -7)) : null;
-  const wList = ws.slice().reverse().slice(0, ui.weightShowAll ? 9999 : 5);
+  const wEdit = ui.weightEdit ? ws.find((w) => w.id === ui.weightEdit) : null;
   const last = ms[ms.length - 1];
   const editing = ui.measureEdit ? ms.find((m) => m.id === ui.measureEdit) : null;
-  const shown = ms.slice(-4);
+  if (ui.measureIdx == null || ui.measureIdx >= ms.length) ui.measureIdx = ms.length - 1;
+  const cur = ms[ui.measureIdx], prevM = ms[ui.measureIdx - 1];
   return `
-  <section class="card stack"><div class="row"><h2>Peso</h2>${wl && wWeek && wWeek !== wl ? `<span class="delta">7 giorni: ${L.fmtDelta(wl.kg, wWeek.kg)} kg</span>` : ""}</div>
-    <div class="wrow"><input class="wdate" id="wDate" type="date" value="${L.todayISO()}" aria-label="Data"><label class="field"><input id="wVal" inputmode="decimal" placeholder="${wl ? esc(L.fmtNum(wl.kg)) : "kg"}" aria-label="Peso in kg"><em>kg</em></label><button class="btn small" data-act="save-weight">Salva</button></div>
-    ${wList.length ? `<div class="tbl-wrap"><table class="tbl">${wList.map((w, i, a) => `<tr><td>${esc(L.fmtDate(w.date))}</td><td class="num">${L.fmtNum(w.kg)} kg</td><td class="num delta">${a[i + 1] ? L.fmtDelta(w.kg, a[i + 1].kg) : ""}</td><td><span class="acts"><button class="mini" data-act="edit-weight" data-id="${w.id}">Modifica</button><button class="mini danger" data-confirm="delete-weight" data-id="${w.id}">Elimina</button></span></td></tr>`).join("")}</table></div>` : `<p class="hint">Registra il peso quando vuoi, anche ogni giorno.</p>`}
-    ${ws.length > 5 ? `<button class="btn ghost small" data-act="weights-all">${ui.weightShowAll ? "Mostra meno" : `Mostra tutti (${ws.length})`}</button>` : ""}
+  <section class="card stack"><div class="row"><h2>Esporta</h2></div>
+    <div class="row"><button class="btn ghost small" style="flex:1" data-act="export-measures" data-mode="last">Ultime misure (PDF)</button><button class="btn ghost small" style="flex:1" data-act="export-measures" data-mode="all">Storico completo (PDF)</button></div></section>
+
+  <section class="card stack"><div class="row"><h2>Peso</h2>${wl && wWeek && wWeek !== wl ? `<span class="delta">7 giorni: ${L.fmtDelta(wl.kg, wWeek.kg)} kg${wl.scale === "other" || wWeek.scale === "other" ? "*" : ""}</span>` : ""}</div>
+    ${wEdit ? `<div class="banner info">Stai modificando il peso del ${esc(L.fmtDate(wEdit.date))}</div>` : ""}
+    <div class="seg scale-seg" role="group" aria-label="Bilancia"><button data-act="scale" data-v="home" class="${(ui.weightScale ?? wEdit?.scale ?? "home") === "home" ? "sel" : ""}">Bilancia personale<small>quella di casa</small></button><button data-act="scale" data-v="other" class="${(ui.weightScale ?? wEdit?.scale ?? "home") === "other" ? "sel alt" : ""}">Altra bilancia<small>fuori casa, palestra…</small></button></div>
+    <div class="wrow"><input class="wdate" id="wDate" type="date" value="${wEdit ? wEdit.date : L.todayISO()}" aria-label="Data"><label class="field"><input id="wVal" inputmode="decimal" value="${wEdit ? esc(L.fmtNum(wEdit.kg)) : ""}" placeholder="${wl ? esc(L.fmtNum(wl.kg)) : "kg"}" aria-label="Peso in kg"><em>kg</em></label><button class="btn small" data-act="save-weight">${wEdit ? "Salva modifica" : "Salva"}</button></div>
+    ${wEdit ? `<button class="btn ghost small" data-act="weight-cancel">Annulla modifica</button>` : ""}
+    ${ws.length ? chartBlock("weight", ws.map((w) => ({ date: w.date, v: w.kg, alt: w.scale === "other" })), "kg", "D") : ""}
+    ${ws.length ? `<div class="label">Tutti i pesi</div><div class="groups">${groupBy(ws.slice().reverse(), (w) => w.date.slice(0, 7)).map((g, gi) => {
+      const [yy, mm] = g.key.split("-"), avg = g.items.reduce((a, w) => a + w.kg, 0) / g.items.length;
+      return `<details ${gi === 0 || g.items.some((w) => w.id === ui.weightEdit) ? "open" : ""}><summary><span>${MONTH_NAMES[+mm - 1]} ${yy}</span><span class="hint">${g.items.length} ${g.items.length === 1 ? "valore" : "valori"} · media ${L.fmtNum(Math.round(avg * 10) / 10)} kg${g.items.some((w) => w.scale === "other") ? ` · <span class="scale-tag">${g.items.filter((w) => w.scale === "other").length} altra bil.</span>` : ""}</span></summary>
+        <div class="tbl-wrap"><table class="tbl">${g.items.map((w) => { const i = ws.findIndex((x) => x.id === w.id), pv = ws[i - 1]; return `<tr class="tap ${w.id === ui.weightEdit ? "editing" : ""}" data-act="edit-weight" data-id="${w.id}"><td>${esc(L.fmtDate(w.date))}${w.scale === "other" ? ' <span class="scale-tag">altra bilancia</span>' : ""}</td><td class="num ${w.scale === "other" ? "alt" : ""}">${L.fmtNum(w.kg)} kg</td><td class="num delta">${pv ? L.fmtDelta(w.kg, pv.kg) + (pv.scale === "other" || w.scale === "other" ? "*" : "") : ""}</td><td class="num"><button class="mini danger" data-confirm="delete-weight" data-id="${w.id}">Elimina</button></td></tr>`; }).join("")}</table></div></details>`;
+    }).join("")}</div><p class="hint">Tocca un giorno per modificarlo. * differenza calcolata con una pesata fatta su un'altra bilancia: può esserci uno scarto.</p>` : `<p class="hint">Registra il peso quando vuoi, anche ogni giorno.</p>`}
   </section>
-  <section class="card stack"><h2>Circonferenze</h2>
+
+  ${cur ? `<section class="card stack"><div class="row"><h2>Storico circonferenze</h2><span class="hint">${ui.measureIdx + 1} di ${ms.length}</span></div>
+    <div class="nav-row"><button class="icon-btn" data-act="measure-nav" data-dir="-1" ${ui.measureIdx <= 0 ? "disabled" : ""} aria-label="Misurazione precedente">‹</button>
+      <div class="nav-date"><b>${esc(L.fmtDate(cur.date, { year: true }))}</b><span class="hint">${prevM ? `confronto con ${esc(L.fmtDate(prevM.date, { weekday: false }))}` : "prima misurazione"}</span></div>
+      <button class="icon-btn" data-act="measure-nav" data-dir="1" ${ui.measureIdx >= ms.length - 1 ? "disabled" : ""} aria-label="Misurazione successiva">›</button></div>
+    <div class="tbl-wrap"><table class="tbl"><tr><th>Misura</th><th class="num">cm</th><th class="num">vs prec.</th><th class="num">vs prima</th></tr>
+    ${L.MEASURES.map((m) => `<tr class="tap" data-act="measure-trend" data-mk="${m.k}"><td>${m.name} <span class="hint">›</span></td><td class="num">${cur.values[m.k] != null ? L.fmtNum(cur.values[m.k]) : "–"}</td><td class="num delta">${prevM ? L.fmtDelta(cur.values[m.k], prevM.values[m.k]) : "–"}</td><td class="num delta">${L.fmtDelta(cur.values[m.k], ms[0].values[m.k])}</td></tr>`).join("")}</table></div>
+    <p class="hint">Tocca una misura per vederne l'andamento nel tempo.</p>
+    <div class="row"><button class="btn ghost small" style="flex:1" data-act="edit-measure" data-id="${cur.id}">Modifica</button><button class="mini danger" style="flex:1;padding:9px" data-confirm="delete-measure" data-id="${cur.id}">Elimina</button></div>
+    <div class="label">Tutte le misurazioni</div>
+    <div class="groups">${groupBy(ms.map((m, i) => ({ ...m, i })).reverse(), (m) => m.date.slice(0, 4)).map((g, gi) => `<details ${gi === 0 || g.items.some((m) => m.i === ui.measureIdx) ? "open" : ""}><summary><span>${g.key}</span><span class="hint">${g.items.length} ${g.items.length === 1 ? "misurazione" : "misurazioni"}</span></summary>
+      <ul class="list">${g.items.map((m) => `<li class="tap ${m.i === ui.measureIdx ? "editing" : ""}" data-act="measure-jump" data-idx="${m.i}"><span>${esc(L.fmtDate(m.date))}</span><span class="hint">${m.values.waist != null ? `vita ${L.fmtNum(m.values.waist)} cm` : `${Object.keys(m.values).length} misure`} ›</span></li>`).join("")}</ul></details>`).join("")}</div>
+  </section>` : ""}
+
+  <section class="card stack"><h2>${editing ? `Modifica misurazione del ${esc(L.fmtDate(editing.date, { weekday: false }))}` : "Nuova misurazione"}</h2>
     <label class="label" for="mDate">Data<input id="mDate" type="date" value="${editing ? editing.date : L.todayISO()}"></label>
     <div class="body-fig">${bodySvg()}<div>${L.MEASURES.map((m, i) => `<div class="mrow ${m.k === ui.measureActive ? "on" : ""}" data-mk="${m.k}"><span class="n">${i + 1}</span>
       <div><b>${m.name}</b><small>${m.hint}</small>${last?.values[m.k] != null ? `<span class="prev">Ultima: ${L.fmtNum(last.values[m.k])} cm</span>` : ""}</div>
       <label class="field"><input id="m-${m.k}" data-mk="${m.k}" inputmode="decimal" value="${editing?.values[m.k] != null ? esc(L.fmtNum(editing.values[m.k])) : ""}" placeholder="${last?.values[m.k] != null ? esc(L.fmtNum(last.values[m.k])) : ""}" aria-label="${m.name} in cm"><em>cm</em></label></div>`).join("")}</div></div>
     <div class="row">${editing ? `<button class="btn ghost" data-act="measure-cancel">Annulla modifica</button>` : ""}<button class="btn" style="flex:1" data-act="save-measures">${editing ? "Salva modifiche" : "Salva misure"}</button></div>
-  </section>
-  ${ms.length ? `<section class="card stack"><h2>Andamento</h2><p class="hint">In cm. L'ultima colonna è la differenza dalla prima misurazione.</p>
-    <div class="tbl-wrap"><table class="tbl"><tr><th>Misura</th>${shown.map((e) => `<th class="num">${esc(L.fmtDate(e.date, { weekday: false }))}</th>`).join("")}<th class="num">Δ</th></tr>
-    ${L.MEASURES.map((m) => `<tr><td>${m.name}</td>${shown.map((e) => `<td class="num">${e.values[m.k] != null ? L.fmtNum(e.values[m.k]) : "–"}</td>`).join("")}<td class="num delta">${L.fmtDelta(last.values[m.k], ms[0].values[m.k])}</td></tr>`).join("")}</table></div>
-    <div class="label">Misurazioni salvate</div>
-    <ul class="list">${ms.slice().reverse().map((e) => `<li class="${ui.measureEdit === e.id ? "editing" : ""}"><span>${esc(L.fmtDate(e.date, { year: true }))}</span><span class="acts"><button class="mini" data-act="edit-measure" data-id="${e.id}">Modifica</button><button class="mini danger" data-confirm="delete-measure" data-id="${e.id}">Elimina</button></span></li>`).join("")}</ul>
-  </section>` : ""}`;
+  </section>`;
+}
+
+function openMeasureTrend(k) {
+  const m = L.MEASURES.find((x) => x.k === k);
+  const pts = store.live(D().measurements).filter((e) => e.values[k] != null).map((e) => ({ date: e.date, v: e.values[k] }));
+  openModal(`<div><div class="label">Andamento</div><h2>${esc(m.name)}</h2></div>
+    ${pts.length ? chartBlock(`m-${k}`, pts, "cm", "W", { table: true }) : `<p class="hint">Nessun valore registrato.</p>`}
+    <button class="btn ghost" data-act="close">Chiudi</button>`);
 }
 
 /* ---------- Report ---------- */
@@ -627,7 +773,7 @@ function viewReport(d) {
     const f = ms[0], l = ms[ms.length - 1];
     parts.push(`<section class="card stack"><h2>Misure e peso</h2>${ms.length ? `<div class="tbl-wrap"><table class="tbl"><tr><th>Misura</th><th class="num">${esc(L.fmtDate(f.date, { weekday: false }))}</th><th class="num">${esc(L.fmtDate(l.date, { weekday: false }))}</th><th class="num">Δ</th></tr>
       ${L.MEASURES.map((m) => `<tr><td>${m.name}</td><td class="num">${L.fmtNum(f.values[m.k]) || "–"}</td><td class="num">${L.fmtNum(l.values[m.k]) || "–"}</td><td class="num">${L.fmtDelta(l.values[m.k], f.values[m.k])}</td></tr>`).join("")}</table></div>` : `<p class="hint">Nessuna misurazione registrata.</p>`}
-      ${ws.length ? `<p class="hint">Peso: ${L.fmtNum(ws[0].kg)} kg il ${esc(L.fmtDate(ws[0].date, { weekday: false }))}, ${L.fmtNum(ws[ws.length - 1].kg)} kg il ${esc(L.fmtDate(ws[ws.length - 1].date, { weekday: false }))} (${L.fmtDelta(ws[ws.length - 1].kg, ws[0].kg)} kg).</p>` : ""}</section>`);
+      ${ws.length ? `<p class="hint">Peso: ${L.fmtNum(ws[0].kg)} kg il ${esc(L.fmtDate(ws[0].date, { weekday: false }))}${ws[0].scale === "other" ? "*" : ""}, ${L.fmtNum(ws[ws.length - 1].kg)} kg il ${esc(L.fmtDate(ws[ws.length - 1].date, { weekday: false }))}${ws[ws.length - 1].scale === "other" ? "*" : ""} (${L.fmtDelta(ws[ws.length - 1].kg, ws[0].kg)} kg).${ws[0].scale === "other" || ws[ws.length - 1].scale === "other" ? " * altra bilancia, possibile scarto." : ""}</p>` : ""}</section>`);
   }
   if (sec.has("ex")) {
     const exIds = rep.exerciseIds.slice().sort((a, b) => L.exName(d, a).localeCompare(L.exName(d, b), "it"));
@@ -658,6 +804,8 @@ function viewSettings(d) {
       <label class="label" for="ghBranch">Branch<input id="ghBranch" type="text" autocapitalize="none" value="${esc(cfg.branch || "main")}"></label>
       <label class="label" for="ghPath">File<input id="ghPath" type="text" autocapitalize="none" value="${esc(cfg.path || "harden-data.json")}"></label>
       <label class="label full" for="ghToken">Token (fine-grained, solo questo repository)<input id="ghToken" type="password" autocomplete="off" value="${esc(gh.getToken())}" placeholder="github_pat_…"></label>
+      <label class="label" for="ghExpiry">Scadenza token<input id="ghExpiry" type="date" value="${esc(cfg.expiry || "")}"></label>
+      <label class="label" for="ghDevice">Nome dispositivo<input id="ghDevice" type="text" value="${esc(cfg.device || "")}" placeholder="es. iPhone Giuseppe"></label>
     </div>
     <button class="btn" data-act="gh-save">Salva e prova la connessione</button>
     <div class="row"><button class="btn ghost small" style="flex:1" data-act="sync">Sincronizza ora</button><button class="btn ghost small" style="flex:1" data-confirm="gh-download">Scarica da GitHub</button></div>
@@ -694,6 +842,7 @@ function openExerciseEditor(id) {
     <label class="label" for="exName">Nome<input id="exName" type="text" value="${esc(e.name)}"></label>
     <div class="extras" style="margin-top:0">
       <label class="label" for="exDist">Distretto<select id="exDist">${L.DISTRICTS.map((x) => `<option ${x === e.district ? "selected" : ""}>${x}</option>`).join("")}</select></label>
+      <label class="label full" for="exSetup">Regolazioni<input id="exSetup" type="text" value="${esc(e.setup || "")}" placeholder="es. schienale tacca 3, sellino 4"></label>
       <label class="label" for="exBar">Bilanciere<select id="exBar"><option value="">Nessuno</option>${bars.map((b) => `<option value="${b.id}" ${e.usesBar && e.defaultBarId === b.id ? "selected" : ""}>${esc(b.name)}</option>`).join("")}<option value="any" ${e.usesBar && !e.defaultBarId ? "selected" : ""}>Sì, da scegliere</option></select></label>
     </div>
     <div class="row">${id ? `<button class="btn ghost" style="color:var(--danger)" data-confirm="delete-exercise" data-id="${id}">Elimina</button>` : `<button class="btn ghost" data-act="close">Annulla</button>`}<button class="btn" data-act="save-exercise" data-id="${esc(id || "")}">Salva</button></div>`);
@@ -775,6 +924,23 @@ const actions = {
     startTimer(slot.rest, L.exName(D(), L.resolveSlot(cycleOfSession(s), slot, s).exerciseId));
   },
   swap: (el) => openSubstitution(el.dataset.slot),
+  "add-set": (el) => {
+    document.activeElement?.blur?.();
+    store.mutate((d) => { const sess = d.sessions.find((x) => x.id === ui.sessionId); const e = ensureEntry(d, sess, slotOf(sess, el.dataset.slot)); e.extra = (e.extra || 0) + 1; });
+    render();
+  },
+  "remove-set": (el) => {
+    document.activeElement?.blur?.();
+    store.mutate((d) => {
+      const sess = d.sessions.find((x) => x.id === ui.sessionId), slot = slotOf(sess, el.dataset.slot);
+      const e = ensureEntry(d, sess, slot);
+      if (!e.extra) return;
+      const n = L.targetsFor(L.resolveSlot(d.cycles.find((c) => c.id === sess.cycleId), slot, sess).blocks, sess.week).length;
+      e.sets.splice(n + e.extra - 1, 1);
+      e.extra -= 1;
+    });
+    render();
+  },
   restore: (el) => restoreOriginal(el.dataset.slot),
   history: (el) => openHistory(el.dataset.ex),
   "sub-pick": (el) => { subState.pick = el.dataset.id; renderSubList(); },
@@ -826,17 +992,18 @@ const actions = {
   "save-weight": () => {
     const kg = L.parseNum($("#wVal").value), date = $("#wDate").value;
     if (kg == null || !date) { toast("Inserisci data e peso in kg"); return; }
+    const editId = ui.weightEdit;
     store.mutate((d) => {
-      const ex = store.live(d.weights).find((w) => w.date === date);
-      store.upsert(d, "weights", { id: ex?.id || store.uid(), date, kg });
+      const sameDay = store.live(d.weights).find((w) => w.date === date && w.id !== editId);
+      if (editId && sameDay) store.softDelete(d, "weights", sameDay.id);
+      store.upsert(d, "weights", { id: editId || sameDay?.id || store.uid(), date, kg, scale: ui.weightScale ?? D().weights.find((w) => w.id === editId)?.scale ?? "home" });
     });
-    render(); toast("Peso salvato"); runSync(`feat: log weight (${date})`, { quiet: true });
+    ui.weightEdit = null; ui.weightScale = null;
+    render(); toast(editId ? "Peso aggiornato" : "Peso salvato"); runSync(`feat: log weight (${date})`, { quiet: true });
   },
-  "edit-weight": (el) => {
-    const w = D().weights.find((x) => x.id === el.dataset.id);
-    $("#wDate").value = w.date; $("#wVal").value = L.fmtNum(w.kg); $("#wVal").focus();
-    toast("Correggi il valore e premi Salva");
-  },
+  "edit-weight": (el) => { ui.weightEdit = el.dataset.id; ui.weightScale = null; render(); $("#wVal")?.focus(); },
+  "weight-cancel": () => { ui.weightEdit = null; ui.weightScale = null; render(); },
+  scale: (el) => { ui.weightScale = el.dataset.v; $$(".scale-seg button").forEach((b) => { const on = b === el; b.classList.toggle("sel", on); b.classList.toggle("alt", on && b.dataset.v === "other"); }); },
   "weights-all": () => { ui.weightShowAll = !ui.weightShowAll; render(); },
   "save-measures": () => {
     const values = {};
@@ -844,19 +1011,41 @@ const actions = {
     L.MEASURES.forEach((m) => { const x = L.parseNum($(`#m-${m.k}`).value); if (x != null) { values[m.k] = x; any = true; } });
     const date = $("#mDate").value;
     if (!any || !date) { toast("Inserisci la data e almeno una misura"); return; }
-    const editing = ui.measureEdit;
+    const editId = ui.measureEdit;
     store.mutate((d) => {
-      if (editing) store.softDelete(d, "measurements", editing);
-      const same = store.live(d.measurements).find((m) => m.date === date);
-      store.upsert(d, "measurements", { id: same?.id || store.uid(), date, values: { ...(same?.values || {}), ...values } });
+      const sameDay = store.live(d.measurements).find((m) => m.date === date && m.id !== editId);
+      if (editId) {
+        // Editing replaces the values of that measurement; another one on the same date is folded in.
+        if (sameDay) store.softDelete(d, "measurements", sameDay.id);
+        store.upsert(d, "measurements", { id: editId, date, values });
+      } else {
+        store.upsert(d, "measurements", { id: sameDay?.id || store.uid(), date, values: { ...(sameDay?.values || {}), ...values } });
+      }
     });
-    ui.measureEdit = null; render(); toast(editing ? "Misurazione aggiornata" : "Misure salvate");
+    ui.measureEdit = null;
+    const ms = store.live(D().measurements).sort((a, b) => (a.date > b.date ? 1 : -1));
+    ui.measureIdx = ms.findIndex((m) => m.date === date);
+    render(); toast(editId ? "Misurazione aggiornata" : "Misure salvate");
     runSync(`feat: log measurements (${date})`, { quiet: true });
   },
   "edit-measure": (el) => { ui.measureEdit = el.dataset.id; render(); $("#mDate")?.scrollIntoView({ block: "center" }); },
   "measure-cancel": () => { ui.measureEdit = null; render(); },
+  "measure-nav": (el) => { ui.measureIdx += +el.dataset.dir; render(); },
+  "measure-trend": (el) => openMeasureTrend(el.dataset.mk),
+  "measure-jump": (el) => { ui.measureIdx = +el.dataset.idx; render(); $(".nav-row")?.scrollIntoView({ block: "center" }); },
+  "chart-g": (el) => { ui.charts[el.dataset.chart] = { g: el.dataset.g, off: 0 }; rerenderChart(el.dataset.chart); },
+  "chart-pan": (el) => { const st = ui.charts[el.dataset.chart]; st.off = Math.max(0, st.off + +el.dataset.dir); rerenderChart(el.dataset.chart); },
+  "export-measures": async (el) => {
+    const label = el.textContent; el.disabled = true; el.textContent = "Preparo il PDF…";
+    try {
+      const pdf = await import("./pdf.js");
+      const bytes = await pdf.measuresPdf(D(), el.dataset.mode);
+      await pdf.deliverFile(bytes, `Harden misure ${el.dataset.mode === "all" ? "storico" : "ultime"} - ${L.todayISO()}.pdf`, "application/pdf");
+    } catch (e) { toast(e.message, { error: true }); }
+    el.disabled = false; el.textContent = label;
+  },
   "gh-save": async () => {
-    gh.setConfig({ owner: $("#ghOwner").value.trim(), repo: $("#ghRepo").value.trim(), branch: $("#ghBranch").value.trim() || "main", path: $("#ghPath").value.trim() || "harden-data.json" });
+    gh.setConfig({ owner: $("#ghOwner").value.trim(), repo: $("#ghRepo").value.trim(), branch: $("#ghBranch").value.trim() || "main", path: $("#ghPath").value.trim() || "harden-data.json", expiry: $("#ghExpiry").value, device: $("#ghDevice").value.trim() });
     gh.setToken($("#ghToken").value.trim());
     if (!gh.isConfigured()) { toast("Compila utente, repository e token"); renderHeader(); return; }
     try {
@@ -876,7 +1065,7 @@ const actions = {
     const id = el.dataset.id || store.uid();
     store.mutate((d) => {
       const prev = L.exerciseOf(d, id) || {};
-      store.upsert(d, "exercises", { ...prev, id, name, district: $("#exDist").value, usesBar: !!barVal, defaultBarId: barVal && barVal !== "any" ? barVal : "" });
+      store.upsert(d, "exercises", { ...prev, id, name, district: $("#exDist").value, usesBar: !!barVal, defaultBarId: barVal && barVal !== "any" ? barVal : "", setup: $("#exSetup").value.trim() });
     });
     closeModal(); render(); toast("Esercizio salvato");
   },
@@ -887,8 +1076,8 @@ const actions = {
 // Two-tap confirmations: first tap arms the button, second tap runs the action.
 const confirmed = {
   "delete-session": (id) => { store.mutate((d) => store.softDelete(d, "sessions", id)); render(); toast("Sessione eliminata"); runSync("fix: remove session", { quiet: true }); },
-  "delete-weight": (id) => { store.mutate((d) => store.softDelete(d, "weights", id)); render(); toast("Peso eliminato"); },
-  "delete-measure": (id) => { store.mutate((d) => store.softDelete(d, "measurements", id)); if (ui.measureEdit === id) ui.measureEdit = null; render(); toast("Misurazione eliminata"); },
+  "delete-weight": (id) => { store.mutate((d) => store.softDelete(d, "weights", id)); if (ui.weightEdit === id) ui.weightEdit = null; render(); toast("Peso eliminato"); runSync("fix: remove weight entry", { quiet: true }); },
+  "delete-measure": (id) => { store.mutate((d) => store.softDelete(d, "measurements", id)); if (ui.measureEdit === id) ui.measureEdit = null; ui.measureIdx = null; render(); toast("Misurazione eliminata"); runSync("fix: remove measurement", { quiet: true }); },
   "delete-bar": (id) => { store.mutate((d) => store.softDelete(d, "bars", id)); render(); },
   "delete-exercise": (id) => { store.mutate((d) => store.softDelete(d, "exercises", id)); closeModal(); render(); toast("Esercizio rimosso dal catalogo. Lo storico resta."); },
   "close-cycle": (id) => { store.mutate((d) => { const c = d.cycles.find((x) => x.id === id); c.closed = true; c.closedAt = store.now(); c.updatedAt = store.now(); }); render(); toast("Ciclo chiuso"); },
@@ -952,6 +1141,11 @@ document.addEventListener("change", async (e) => {
     const s = sessionById(ui.sessionId);
     store.mutate((d) => { const sess = d.sessions.find((x) => x.id === s.id); ensureEntry(d, sess, slotOf(sess, t.dataset.slot)).barId = t.value; });
     updateBarTotal(t.dataset.slot); return;
+  }
+  if (act === "setup") {
+    store.mutate((d) => { const ex = L.exerciseOf(d, t.dataset.ex); if (ex) { ex.setup = t.value.trim(); ex.updatedAt = store.now(); } });
+    toast("Regolazioni salvate per le prossime volte");
+    return;
   }
   if (act === "note") {
     const s = sessionById(ui.sessionId);

@@ -1,5 +1,5 @@
 // PDF export built on pdf-lib (vendored, works offline): the coach logbook and the report.
-import { logbookRows, exName, sheetLetters, cycleEnd, fmtRange, fmtDate, fmtNum, fmtDelta, todayISO, MEASURES, DISTRICT_NAMES, reportData } from "./logic.js";
+import { logbookRows, exName, sheetLetters, cycleEnd, fmtRange, fmtDate, fmtNum, fmtDelta, todayISO, addDays, MEASURES, DISTRICT_NAMES, reportData } from "./logic.js";
 import { live } from "./data.js";
 
 async function lib() {
@@ -192,7 +192,8 @@ export async function reportPdf(d, cycleIds, sections) {
     if (ws.length) {
       const f = ws[0], l = ws[ws.length - 1];
       table([{ title: "Peso", w: 0.4 }, { title: fmtDate(f.date, { weekday: false, year: true }), w: 0.2, align: "right" }, { title: fmtDate(l.date, { weekday: false, year: true }), w: 0.2, align: "right" }, { title: "Diff.", w: 0.2, align: "right" }],
-        [["kg", fmtNum(f.kg), fmtNum(l.kg), fmtDelta(l.kg, f.kg)]]);
+        [["kg", fmtNum(f.kg) + (f.scale === "other" ? " *" : ""), fmtNum(l.kg) + (l.scale === "other" ? " *" : ""), fmtDelta(l.kg, f.kg)]]);
+      if (f.scale === "other" || l.scale === "other") { need(14); y -= 10; text("* pesata con un'altra bilancia: possibile scarto.", M, 8, font, mid); y -= 4; }
     }
   }
   if (sections.has("ex")) {
@@ -206,6 +207,78 @@ export async function reportPdf(d, cycleIds, sections) {
       table([{ title: "Ciclo", w: 0.15 }, { title: "Sett.", w: 0.15 }, { title: "Data", w: 0.25 }, { title: "Serie migliore", w: 0.3, align: "right" }, { title: "Serie", w: 0.15, align: "right" }],
         rep.history[id].map((h) => [`Ciclo ${h.cycle.number}`, `S${h.week}`, fmtDate(h.date, { weekday: false, year: true }), h.best?.load == null ? `${h.best?.reps ?? "-"} rip` : `${fmtNum(h.best.load)} kg x ${h.best.reps ?? "-"}`, String(h.count)]));
     }
+  }
+  stampFooter(doc, font);
+  return doc.save();
+}
+
+/* ---------- Body measurements and weight ---------- */
+export async function measuresPdf(d, mode) {
+  const { PDFDocument, StandardFonts, rgb } = await lib();
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const black = rgb(0.08, 0.08, 0.1), mid = rgb(0.4, 0.42, 0.46), line = rgb(0.82, 0.84, 0.87), accent = rgb(0.12, 0.31, 0.82);
+  const ms = live(d.measurements).sort((a, b) => (a.date > b.date ? 1 : -1));
+  const ws = live(d.weights).sort((a, b) => (a.date > b.date ? 1 : -1));
+  const W = A4[0] - 2 * M;
+  let page, y;
+  const newPage = () => { page = doc.addPage(A4); y = A4[1] - M; };
+  const need = (h) => { if (y - h < M + 10) newPage(); };
+  const text = (t, x, size = 9, f = font, color = black) => page.drawText(safe(t), { x, y, size, font: f, color });
+  const heading = (t) => { need(46); y -= 24; text(t, M, 14, bold, accent); y -= 14; };
+  const note = (t) => { need(14); y -= 2; text(t, M, 8, font, mid); y -= 4; };
+  const table = (cols, rows) => {
+    const widths = cols.map((c) => c.w * W);
+    const drawRow = (cells, f, size, isHead) => {
+      need(16); y -= 13;
+      let x = M;
+      cells.forEach((c, i) => {
+        const s = safe(c), tw = f.widthOfTextAtSize(s, size);
+        page.drawText(s, { x: cols[i].align === "right" ? x + widths[i] - tw - 4 : x + 4, y, size, font: f, color: isHead ? mid : black });
+        x += widths[i];
+      });
+      page.drawLine({ start: { x: M, y: y - 4 }, end: { x: M + W, y: y - 4 }, thickness: 0.5, color: line });
+    };
+    drawRow(cols.map((c) => c.title.toUpperCase()), bold, 7.5, true);
+    rows.forEach((r) => drawRow(r, font, 9, false));
+    y -= 6;
+  };
+  const d0 = (s) => fmtDate(s, { weekday: false, year: true });
+
+  newPage();
+  text(mode === "all" ? "Misure e peso - storico" : "Misure e peso", M, 20, bold);
+  y -= 16;
+  text(`${d.profile?.athlete || ""} · generato il ${fmtDate(todayISO(), { year: true })}`, M, 9, font, mid);
+  y -= 6;
+
+  heading("Circonferenze (cm)");
+  if (!ms.length) note("Nessuna misurazione registrata.");
+  else {
+    const cur = ms[ms.length - 1], prev = ms[ms.length - 2], first = ms[0];
+    note(`Ultima misurazione: ${d0(cur.date)}${prev ? ` · precedente: ${d0(prev.date)}` : ""}${ms.length > 1 ? ` · prima: ${d0(first.date)}` : ""}`);
+    table([{ title: "Misura", w: 0.4 }, { title: "cm", w: 0.2, align: "right" }, { title: "vs precedente", w: 0.2, align: "right" }, { title: "vs prima", w: 0.2, align: "right" }],
+      MEASURES.map((m) => [m.name, fmtNum(cur.values[m.k]) || "-", prev ? fmtDelta(cur.values[m.k], prev.values[m.k]) : "-", ms.length > 1 ? fmtDelta(cur.values[m.k], first.values[m.k]) : "-"]));
+    if (mode === "all" && ms.length > 1) {
+      heading("Tutte le misurazioni (cm)");
+      const short = { neck: "Collo", shoulders: "Spalle", chest: "Petto", arm: "Braccio dx", waist: "Vita", hips: "Fianchi", glutes: "Gluteo", thigh: "Coscia dx" };
+      table([{ title: "Data", w: 0.16 }, ...MEASURES.map((m) => ({ title: short[m.k], w: 0.84 / MEASURES.length, align: "right" }))],
+        ms.slice().reverse().map((e) => [d0(e.date), ...MEASURES.map((m) => fmtNum(e.values[m.k]) || "-")]));
+    }
+  }
+
+  heading("Peso (kg)");
+  if (!ws.length) note("Nessun peso registrato.");
+  else {
+    const cur = ws[ws.length - 1], week = ws.find((w) => w.date >= addDays(cur.date, -7)), first = ws[0];
+    table([{ title: "Ultimo peso", w: 0.4 }, { title: "kg", w: 0.2, align: "right" }, { title: "vs 7 giorni", w: 0.2, align: "right" }, { title: "vs primo", w: 0.2, align: "right" }],
+      [[d0(cur.date) + (cur.scale === "other" ? " *" : ""), fmtNum(cur.kg), week && week !== cur ? fmtDelta(cur.kg, week.kg) : "-", ws.length > 1 ? fmtDelta(cur.kg, first.kg) : "-"]]);
+    if (mode === "all" && ws.length > 1) {
+      heading("Tutti i pesi");
+      table([{ title: "Data", w: 0.4 }, { title: "kg", w: 0.3, align: "right" }, { title: "vs precedente", w: 0.3, align: "right" }],
+        ws.slice().reverse().map((w, i, a) => [d0(w.date) + (w.scale === "other" ? " *" : ""), fmtNum(w.kg), a[i + 1] ? fmtDelta(w.kg, a[i + 1].kg) : "-"]));
+    }
+    if (ws.some((w) => w.scale === "other")) note("* pesata con un'altra bilancia (non quella personale): le differenze possono avere uno scarto.");
   }
   stampFooter(doc, font);
   return doc.save();
