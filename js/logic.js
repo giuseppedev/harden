@@ -276,12 +276,12 @@ export function reportData(d, cycleIds) {
 }
 
 /* ---------- Time buckets for charts ---------- */
+/** Point size and the calendar window shown at once: days of a week, weeks of a month, months of a year, years. */
 export const GRANULARITIES = [
-  { k: "D", name: "Giorno", window: 30 },
-  { k: "W", name: "Settimana", window: 26 },
-  { k: "M", name: "Mese", window: 12 },
-  { k: "Q", name: "Trimestre", window: 8 },
-  { k: "Y", name: "Anno", window: 6 },
+  { k: "D", name: "Giorno" },
+  { k: "W", name: "Settimana" },
+  { k: "M", name: "Mese" },
+  { k: "Y", name: "Anno" },
 ];
 /** First day (ISO date) of the bucket that contains `date`. Weeks start on Monday. */
 export function bucketStart(date, g) {
@@ -289,7 +289,6 @@ export function bucketStart(date, g) {
   if (g === "D") return date;
   if (g === "W") { const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return toISO(d); }
   if (g === "M") return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-01`;
-  if (g === "Q") return `${d.getFullYear()}-${pad(Math.floor(d.getMonth() / 3) * 3 + 1)}-01`;
   return `${d.getFullYear()}-01-01`;
 }
 export function shiftBucket(start, g, n) {
@@ -297,7 +296,6 @@ export function shiftBucket(start, g, n) {
   if (g === "D") d.setDate(d.getDate() + n);
   else if (g === "W") d.setDate(d.getDate() + 7 * n);
   else if (g === "M") d.setMonth(d.getMonth() + n);
-  else if (g === "Q") d.setMonth(d.getMonth() + 3 * n);
   else d.setFullYear(d.getFullYear() + n);
   return toISO(d);
 }
@@ -305,17 +303,38 @@ export function bucketLabel(start, g, { short = false } = {}) {
   const d = parseISO(start);
   if (g === "D") return fmtDate(start, { weekday: false });
   if (g === "W") return `${short ? "" : "sett. "}${d.getDate()} ${MONTHS[d.getMonth()]}`;
-  if (g === "M") return `${MONTHS[d.getMonth()]} ${short ? String(d.getFullYear()).slice(2) : d.getFullYear()}`;
-  if (g === "Q") return `T${Math.floor(d.getMonth() / 3) + 1} ${short ? String(d.getFullYear()).slice(2) : d.getFullYear()}`;
+  if (g === "M") return short ? MONTHS[d.getMonth()] : `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
   return String(d.getFullYear());
 }
+const MONTH_FULL = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
+const YEARS_SHOWN = 5;
+/** Calendar window `offset` steps before the one containing `date`: first and last bucket start, and its title. */
+function chartWindow(date, g, offset) {
+  const d = parseISO(date), y = d.getFullYear();
+  if (g === "D") {
+    const from = addDays(bucketStart(date, "W"), -7 * offset), to = addDays(from, 6);
+    const f = parseISO(from), t = parseISO(to);
+    const title = f.getMonth() === t.getMonth() ? `${f.getDate()} – ${t.getDate()} ${MONTHS[t.getMonth()]} ${t.getFullYear()}` : `${f.getDate()} ${MONTHS[f.getMonth()]} – ${t.getDate()} ${MONTHS[t.getMonth()]} ${t.getFullYear()}`;
+    return { from, to, title };
+  }
+  if (g === "W") {
+    const m = parseISO(shiftBucket(bucketStart(date, "M"), "M", -offset));
+    const first = toISO(m), last = addDays(shiftBucket(first, "M", 1), -1);
+    // Weeks that start in this month (a week belongs to the month of its Monday).
+    let from = bucketStart(first, "W"); if (from < first) from = addDays(from, 7);
+    return { from, to: bucketStart(last, "W"), title: `${MONTH_FULL[m.getMonth()].replace(/^./, (c) => c.toUpperCase())} ${m.getFullYear()}` };
+  }
+  if (g === "M") return { from: `${y - offset}-01-01`, to: `${y - offset}-12-01`, title: String(y - offset) };
+  const end = y - offset * YEARS_SHOWN;
+  return { from: `${end - YEARS_SHOWN + 1}-01-01`, to: `${end}-01-01`, title: `${end - YEARS_SHOWN + 1} – ${end}` };
+}
+
 /**
- * Average a dated series into buckets and return one window of `window` buckets.
- * `offset` 0 is the window ending at the newest bucket; 1 is the window before it, and so on.
+ * Average a dated series into buckets and return one calendar window of them (see chartWindow).
+ * `offset` 0 is the window with the newest value (or today); 1 is the one before, and so on.
  */
 export function bucketSeries(points, g, offset = 0) {
-  const gran = GRANULARITIES.find((x) => x.k === g) || GRANULARITIES[0];
-  if (!points.length) return { buckets: [], hasOlder: false, hasNewer: false };
+  if (!points.length) return { buckets: [], hasOlder: false, hasNewer: false, title: "" };
   const sums = new Map();
   for (const p of points) {
     const k = bucketStart(p.date, g);
@@ -324,15 +343,13 @@ export function bucketSeries(points, g, offset = 0) {
     sums.set(k, s);
   }
   const latest = points.reduce((a, p) => (p.date > a ? p.date : a), points[0].date);
-  const newest = bucketStart(latest > todayISO() ? latest : todayISO(), g);
   const oldest = bucketStart(points.reduce((a, p) => (p.date < a ? p.date : a), points[0].date), g);
-  const end = shiftBucket(newest, g, -offset * gran.window);
+  const win = chartWindow(latest > todayISO() ? latest : todayISO(), g, offset);
   const buckets = [];
-  for (let i = gran.window - 1; i >= 0; i--) {
-    const start = shiftBucket(end, g, -i);
+  for (let start = bucketStart(win.from, g); start <= win.to; start = shiftBucket(start, g, 1)) {
     const s = sums.get(start);
     buckets.push({ start, label: bucketLabel(start, g), short: bucketLabel(start, g, { short: true }), v: s ? s.sum / s.n : null, n: s?.n || 0, min: s?.min, max: s?.max, alt: s?.alt || 0 });
   }
-  return { buckets, hasOlder: buckets[0].start > oldest, hasNewer: offset > 0 };
+  return { buckets, title: win.title, hasOlder: win.from > oldest, hasNewer: offset > 0 };
 }
 export function daysSince(date) { return date ? daysBetween(date, todayISO()) : Infinity; }

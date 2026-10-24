@@ -4,7 +4,7 @@ import * as store from "./data.js";
 import * as gh from "./github.js";
 import * as L from "./logic.js";
 
-export const APP_VERSION = "2.2.0";
+export const APP_VERSION = "2.3.0";
 export const TAGLINE = "every set, on record.";
 export const $ = (s, root = document) => root.querySelector(s);
 export const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -98,6 +98,21 @@ export function closeModal() {
 export function openMenu(title, items) {
   openModal(`<h2>${esc(title)}</h2><div class="menu">${items.filter(Boolean).map(([label, act, attrs = ""]) => `<button class="menu-item" data-act="${act}" ${attrs}>${label}</button>`).join("")}</div>
     <button class="btn ghost" data-act="close">Chiudi</button>`);
+}
+
+/* ---------- Exports: same card and same behaviour everywhere ---------- */
+/** Export card: title, one-line description and the "Esporta PDF" button bound to `act`. */
+export const exportCard = (title, hint, act) => `<section class="card row"><div><div class="label">${esc(title)}</div><span class="hint">${esc(hint)}</span></div><button class="btn small nowrap" data-act="${act}">Esporta PDF</button></section>`;
+/** Build a PDF and hand it to the share sheet, showing progress on the button. */
+export async function runExport(el, build) {
+  const label = el.textContent;
+  el.disabled = true; el.textContent = "Preparo…";
+  try {
+    const pdf = await import("./pdf.js");
+    const { bytes, name } = await build(pdf);
+    await pdf.deliverFile(bytes, name, "application/pdf");
+  } catch (e) { toast(e.message, { error: true }); }
+  el.disabled = false; el.textContent = label;
 }
 
 /* ---------- Sync ---------- */

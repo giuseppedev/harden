@@ -12,19 +12,25 @@ function pickSheet(c) {
   return letters;
 }
 
-export function cycleSelect(d, c) {
+const fileInput = `<input id="programFile" type="file" accept=".json,application/json" data-act="import-program-file" class="vh">`;
+
+/** Cycle bar: the cycle shown (a picker when there are several) and a ⋯ menu for cycle-level actions. */
+function cycleBar(d, c) {
   const cycles = L.cyclesSorted(d);
-  if (cycles.length < 2) return `<div class="hint">Ciclo ${c.number} · ${esc(L.fmtRange(c.startDate, L.cycleEnd(c)))} · ${c.closed ? "chiuso" : "in corso"}</div>`;
-  return `<select data-act="cycle" aria-label="Ciclo">${cycles.slice().reverse().map((x) => `<option value="${x.id}" ${x.id === c.id ? "selected" : ""}>Ciclo ${x.number} · ${esc(L.fmtRange(x.startDate, L.cycleEnd(x)))} · ${x.closed ? "chiuso" : "in corso"}</option>`).join("")}</select>`;
+  const label = (x) => `Ciclo ${x.number} · ${esc(L.fmtRange(x.startDate, L.cycleEnd(x)))}${x.closed ? " · chiuso" : ""}`;
+  const pick = cycles.length < 2 ? `<div class="hint">${label(c)}</div>`
+    : `<select data-act="cycle" aria-label="Ciclo">${cycles.slice().reverse().map((x) => `<option value="${x.id}" ${x.id === c.id ? "selected" : ""}>${label(x)}</option>`).join("")}</select>`;
+  return `<div class="cycle-bar">${pick}<button class="icon-btn" data-act="cycle-menu" aria-label="Azioni sul ciclo">⋯</button></div>${fileInput}`;
 }
 
 export function viewProgram(d) {
   const c = cycle();
-  if (!c) return `<section class="card stack"><h2>Nessuna scheda</h2><p class="hint" style="font-size:14px">Importa il file della scheda del coach per iniziare il primo ciclo.</p>${importButton()}</section>`;
+  if (!c) return `<section class="card stack"><h2>Nessuna scheda</h2><p class="hint" style="font-size:14px">Importa il file della scheda del coach per iniziare il primo ciclo.</p>
+    <label class="btn" for="programFile">Importa la scheda del coach</label>${fileInput}</section>`;
   const tabs = `<div class="subtabs" role="tablist">
     <button role="tab" data-act="ptab" data-tab="program" aria-selected="${ui.progTab === "program"}">Programma</button>
     <button role="tab" data-act="ptab" data-tab="sessions" aria-selected="${ui.progTab === "sessions"}">Sessioni</button></div>`;
-  return cycleSelect(d, c) + tabs + (ui.progTab === "sessions" ? sessionsTab(d, c) : programTab(d, c)) + cycleCard(c);
+  return cycleBar(d, c) + tabs + (ui.progTab === "sessions" ? sessionsTab(d, c) : programTab(d, c));
 }
 
 function programTab(d, c) {
@@ -74,14 +80,6 @@ function sessionsTab(d, c) {
   return `${groups || `<p class="empty">Ancora nessuna sessione in questo ciclo.</p>`}
     <button class="btn ghost small" data-act="past-session">+ Inserisci una sessione passata</button>
     <p class="hint" style="text-align:center">Tocca una sessione per rivederla o correggerla. Per eliminarla usa ⋯ in alto nella sessione.</p>`;
-}
-
-const importButton = () => `<label class="btn ghost small" for="programFile" style="flex:1">Nuova scheda</label><input id="programFile" type="file" accept=".json,application/json" data-act="import-program-file" class="vh">`;
-
-function cycleCard(c) {
-  return `<section class="card stack"><div class="row"><div class="label">Ciclo ${c.number}</div><span class="hint">${esc(L.fmtRange(c.startDate, L.cycleEnd(c)))} · ${c.closed ? "chiuso" : "in corso"}</span></div>
-    <div class="row">${importButton()}${c.closed ? `<button class="btn ghost small" style="flex:1" data-act="reopen-cycle" data-id="${c.id}">Riapri ciclo</button>` : `<button class="btn ghost small" style="flex:1" data-confirm="close-cycle" data-id="${c.id}">Chiudi ciclo</button>`}</div>
-    <p class="hint">Con una scheda nuova il ciclo in corso si chiude da solo. I cicli chiusi restano consultabili e modificabili.</p></section>`;
 }
 
 /* ================= Program editor: targets, rest, order and exercises of a cycle ================= */
@@ -222,12 +220,22 @@ Object.assign(actions, {
       <label class="label" for="pastDate">Data<input id="pastDate" type="date" value="${L.todayISO()}"></label>
       <div class="row"><button class="btn ghost" data-act="close">Annulla</button><button class="btn" data-act="past-ok">Compila</button></div>`);
   },
-  "past-ok": () => { const sh = $("#pastSheet").value, w = +$("#pastWeek").value, dt = $("#pastDate").value; closeModal(); startSession(sh, w, dt); },
-  "reopen-cycle": (el) => { store.mutate((d) => { const c = d.cycles.find((x) => x.id === el.dataset.id); c.closed = false; c.updatedAt = store.now(); }); render(); },
+  "past-ok": () => { const sh = $("#pastSheet").value, w = +$("#pastWeek").value, dt = $("#pastDate").value; closeModal(); startSession(sh, w, dt, cycle().id); },
+  "cycle-menu": () => {
+    const c = cycle();
+    openModal(`<div><div class="label">${esc(L.fmtRange(c.startDate, L.cycleEnd(c)))}</div><h2>Ciclo ${c.number}</h2></div>
+      <div class="menu">
+        <label class="menu-item" for="programFile">＋ Nuovo ciclo dalla scheda del coach</label>
+        ${c.closed ? `<button class="menu-item" data-act="reopen-cycle" data-id="${c.id}">↺ Riapri ciclo ${c.number}</button>` : `<button class="menu-item" data-confirm="close-cycle" data-id="${c.id}">Chiudi ciclo ${c.number}</button>`}
+      </div>
+      <p class="hint">Con un ciclo nuovo quello in corso si chiude da solo. I cicli chiusi restano consultabili e modificabili.</p>
+      <button class="btn ghost" data-act="close">Chiudi</button>`);
+  },
+  "reopen-cycle": (el) => { store.mutate((d) => { const c = d.cycles.find((x) => x.id === el.dataset.id); c.closed = false; c.updatedAt = store.now(); }); closeModal(); render(); toast("Ciclo riaperto"); },
 });
 
 Object.assign(confirmed, {
-  "close-cycle": (id) => { store.mutate((d) => { const c = d.cycles.find((x) => x.id === id); c.closed = true; c.closedAt = store.now(); c.updatedAt = store.now(); }); render(); toast("Ciclo chiuso"); },
+  "close-cycle": (id) => { store.mutate((d) => { const c = d.cycles.find((x) => x.id === id); c.closed = true; c.closedAt = store.now(); c.updatedAt = store.now(); }); closeModal(); render(); toast("Ciclo chiuso"); },
 });
 
 Object.assign(changes, {

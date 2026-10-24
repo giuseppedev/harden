@@ -1,7 +1,7 @@
 // Measures: weight and circumferences in two sub-tabs; entry and editing happen in bottom sheets.
 import * as store from "../data.js";
 import * as L from "../logic.js";
-import { $, $$, esc, D, ui, actions, confirmed, toast, openModal, closeModal, render, runSync, deleteWithUndo, byDate, r1 } from "../core.js";
+import { $, $$, esc, D, ui, actions, confirmed, toast, openModal, closeModal, render, runSync, deleteWithUndo, byDate, r1, exportCard, runExport } from "../core.js";
 import { chartBlock, groupBy, MONTH_NAMES } from "../charts.js";
 
 function bodySvg() {
@@ -22,8 +22,7 @@ export function viewMeasures(d) {
   const tabs = `<div class="subtabs" role="tablist">
     <button role="tab" data-act="mtab" data-tab="weight" aria-selected="${ui.mTab === "weight"}">Peso</button>
     <button role="tab" data-act="mtab" data-tab="circ" aria-selected="${ui.mTab === "circ"}">Circonferenze</button></div>`;
-  const exportCard = `<section class="card row"><div><div class="label">Esporta in PDF</div><span class="hint">Ultime circonferenze e peso degli ultimi 7 giorni</span></div><button class="btn ghost small" data-act="export-measures">Esporta</button></section>`;
-  return tabs + (ui.mTab === "weight" ? weightTab(ws) : circTab(ms)) + exportCard;
+  return exportCard("Misure e peso", "Ultime circonferenze e peso a 7 giorni", "export-measures") + tabs + (ui.mTab === "weight" ? weightTab(ws) : circTab(ms));
 }
 
 function weightTab(ws) {
@@ -39,7 +38,7 @@ function weightTab(ws) {
     <div class="deltas">${week && week !== last ? `<span>7 giorni <b>${L.fmtDelta(last.kg, week.kg)}${flag(last, week)}</b></span>` : ""}${ws.length > 1 ? `<span>Dal primo <b>${L.fmtDelta(last.kg, first.kg)}${flag(last, first)}</b></span>` : ""}<span>${ws.length} pesate</span></div>
     <button class="btn" data-act="weight-new">+ Registra peso</button>
   </section>
-  <section class="card stack"><h2>Andamento</h2>${chartBlock("weight", ws.map((w) => ({ date: w.date, v: w.kg, alt: w.scale === "other" })), "kg", "D")}</section>
+  <section class="card stack"><h2>Andamento</h2>${chartBlock("weight", ws.map((w) => ({ date: w.date, v: w.kg, alt: w.scale === "other" })), "kg", "D", { decimals: 1 })}</section>
   <section class="card stack"><h2>Storico</h2>
     <div class="groups">${groupBy(ws.slice().reverse(), (w) => w.date.slice(0, 7)).map((g, gi) => {
       const [yy, mm] = g.key.split("-"), avg = g.items.reduce((a, w) => a + w.kg, 0) / g.items.length, alts = g.items.filter((w) => w.scale === "other").length;
@@ -166,15 +165,7 @@ Object.assign(actions, {
     closeModal(); render(); toast(editId ? "Misurazione aggiornata" : "Misure salvate");
     runSync(`feat: log measurements (${date})`, { quiet: true });
   },
-  "export-measures": async (el) => {
-    const label = el.textContent; el.disabled = true; el.textContent = "Preparo il PDF…";
-    try {
-      const pdf = await import("../pdf.js");
-      const bytes = await pdf.measuresPdf(D());
-      await pdf.deliverFile(bytes, `Misure e peso - ${L.todayISO()}.pdf`, "application/pdf");
-    } catch (e) { toast(e.message, { error: true }); }
-    el.disabled = false; el.textContent = label;
-  },
+  "export-measures": (el) => runExport(el, async (pdf) => ({ bytes: await pdf.measuresPdf(D()), name: `Misure e peso - ${L.todayISO()}.pdf` })),
 });
 
 Object.assign(confirmed, {

@@ -1,6 +1,6 @@
 // Logbook: the coach's sheet, one page per sheet letter, filled only in the weeks done. Exported as PDF.
 import * as L from "../logic.js";
-import { esc, D, ui, actions, toast, render, cycle } from "../core.js";
+import { esc, D, ui, actions, render, cycle, exportCard, runExport } from "../core.js";
 
 export function viewLogbook(d) {
   const c = cycle();
@@ -20,8 +20,7 @@ export function viewLogbook(d) {
     lines[0] = lines[0].replace(/^<tr([^>]*)>/, `<tr$1><td class="name" rowspan="${halves * 3}">${idx + 1}. ${esc(L.exName(d, r.exerciseId))}${r.isSub ? `<small>(sost. di ${esc(L.exName(d, r.originalId))})</small>` : ""}${Object.keys(r.variants).length ? `<small class="var">${esc(L.variantSummary(r.variants))}</small>` : ""}</td>`);
     return lines.join("");
   }).join("");
-  return `<section class="card stack"><div class="row"><div><div class="label">Ciclo ${c.number}${c.closed ? " · chiuso" : ""}</div><span class="hint">${esc(L.fmtRange(c.startDate, L.cycleEnd(c)))}</span></div><button class="btn small" data-act="export-logbook">Esporta PDF</button></div>
-    <p class="hint">Per un altro ciclo sceglilo nel tab Scheda. Le serie MAV non vengono riportate; i sostituti hanno una riga loro.</p></section>
+  return `${exportCard(`Logbook ciclo ${c.number}`, `${L.fmtRange(c.startDate, L.cycleEnd(c))} · tutte le schede`, "export-logbook")}
   <div class="grid4">${letters.map((l) => `<button class="pick ${l === ui.sheet ? "sel" : ""}" data-act="log-sheet" data-sheet="${esc(l)}"><b>${esc(l)}</b></button>`).join("")}</div>
   <div class="sheet-wrap"><div class="sheet-head"><b>Scheda ${esc(ui.sheet)}</b><span>${esc(d.profile?.athlete || "")} · Ciclo ${c.number}</span></div>
   <table class="sheet">${head}${body}</table></div>`;
@@ -29,14 +28,8 @@ export function viewLogbook(d) {
 
 Object.assign(actions, {
   "log-sheet": (el) => { ui.sheet = el.dataset.sheet; render(); },
-  "export-logbook": async (el) => {
-    el.disabled = true; el.textContent = "Preparo…";
-    try {
-      const pdf = await import("../pdf.js");
-      const c = cycle();
-      const bytes = await pdf.logbookPdf(D(), c);
-      await pdf.deliverFile(bytes, `Logbook ciclo ${c.number} - ${L.todayISO()}.pdf`, "application/pdf");
-    } catch (e) { toast(e.message, { error: true }); }
-    el.disabled = false; el.textContent = "Esporta PDF";
-  },
+  "export-logbook": (el) => runExport(el, async (pdf) => {
+    const c = cycle();
+    return { bytes: await pdf.logbookPdf(D(), c), name: `Logbook ciclo ${c.number} - ${L.todayISO()}.pdf` };
+  }),
 });

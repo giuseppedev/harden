@@ -1,7 +1,7 @@
 // Session view: full screen, one card per exercise. Rarely used actions live in the ⋯ menus.
 import * as store from "../data.js";
 import * as L from "../logic.js";
-import { $, $$, esc, D, ui, actions, changes, inputs, toast, openModal, closeModal, openMenu, render, renderHeader, go, cycle, sessionById, cycleOfSession, runSync, deleteWithUndo } from "../core.js";
+import { $, $$, esc, D, ui, actions, changes, inputs, toast, openModal, closeModal, openMenu, render, renderHeader, go, sessionById, cycleOfSession, runSync, deleteWithUndo } from "../core.js";
 import { startTimer, unlockAudio, stopTimer } from "../timer.js";
 import { chartBlock } from "../charts.js";
 
@@ -224,8 +224,8 @@ export function updateBarTotal(slotId) {
 export const refreshBarTotals = () => $$("[data-total]").forEach((el) => updateBarTotal(el.dataset.total));
 
 /* ---------- Start and finish ---------- */
-export function startSession(sheet, week, date) {
-  const d = D(), c = cycle();
+export function startSession(sheet, week, date, cycleId) {
+  const d = D(), c = d.cycles.find((x) => x.id === cycleId);
   const existing = L.sessionsOf(d, c.id).filter((s) => s.sheet === sheet && s.week === week).pop();
   const back = ui.view === "workout" ? ui.back : ui.view;
   if (existing) { go("workout", { sessionId: existing.id, back }); return; }
@@ -443,7 +443,7 @@ export function openHistory(exerciseId) {
   const hist = L.historyFor(d, exerciseId);
   const pts = hist.map((h) => ({ date: h.session.date, v: L.bestSet(L.countedSets(h))?.load })).filter((x) => x.v != null).reverse();
   openModal(`<div><div class="label">Storico e progressione</div><h2>${esc(L.exName(d, exerciseId))}</h2></div>
-    ${pts.length ? `<div class="label">Carico migliore (dischi)</div>${chartBlock(`ex-${exerciseId}`, pts, "kg", "D")}` : ""}
+    ${pts.length ? `<div class="label">Carico migliore (dischi)</div>${chartBlock(`ex-${exerciseId}`, pts, "kg", "W")}` : ""}
     ${hist.length ? `<div class="tbl-wrap"><table class="tbl"><tr><th>Data</th><th>Ciclo</th><th>Serie (rip × kg)</th></tr>
     ${hist.map((h) => `<tr><td>${esc(L.fmtDate(h.session.date, { weekday: false, year: true }))}</td><td>C${h.cycle.number} S${h.session.week}</td><td style="white-space:normal">${L.exerciseOf(d, exerciseId)?.variants?.length ? `<b>${esc(L.variantOf(d, h.entry))}</b> · ` : ""}${L.countedSets(h).map(L.fmtSet).join(", ")}${h.entry.note ? `<br><span class="hint">${esc(h.entry.note)}</span>` : ""}</td></tr>`).join("")}</table></div>` : `<p class="hint">Nessuna serie registrata finora.</p>`}
     <button class="btn ghost" data-act="close">Chiudi</button>`);

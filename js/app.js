@@ -3,7 +3,7 @@
 import * as store from "./data.js";
 import * as gh from "./github.js";
 import * as L from "./logic.js";
-import { $, $$, esc, D, ui, actions, confirmed, changes, inputs, hooks, TAGLINE, openModal, closeModal, cycle, sessionById, runSync, syncBadge, toast } from "./core.js";
+import { $, $$, esc, D, ui, actions, confirmed, changes, inputs, hooks, TAGLINE, openModal, closeModal, sessionById, runSync, syncBadge, toast } from "./core.js";
 import { drawTimer, initTimer, wakeLock } from "./timer.js";
 import { viewDashboard, measureDue } from "./views/dashboard.js";
 import { planStatus } from "./views/payments.js";
@@ -19,7 +19,7 @@ const TITLES = { home: "Harden", program: "Scheda", measures: "Misure", report: 
 
 /* ================= Rendering ================= */
 function headerSub() {
-  const c = D() && store.hasData() && cycle();
+  const c = D() && store.hasData() && L.currentCycle(D());
   if (ui.view !== "home" || !c) return "";
   if (c.closed) return `Ciclo ${c.number} · chiuso`;
   const day = L.daysBetween(c.startDate, L.todayISO()) + 1, total = c.weeks * 7;

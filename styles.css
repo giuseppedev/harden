@@ -215,7 +215,7 @@ details p b { color: var(--fg); }
 .tbl tr.tap:active td { background: var(--accent-soft); }
 .tbl tr.editing td { background: var(--accent-soft); }
 /* v1.4: granularity switch, chart summary, grouped lists, PR, extra sets, reminders */
-.gran { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; background: var(--bg); border-radius: 10px; padding: 3px; }
+.gran { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--bg); border-radius: 10px; padding: 3px; }
 .gran button { border: 0; background: transparent; border-radius: 8px; padding: 7px 0; font-size: 12px; font-weight: 600; color: var(--muted); }
 .gran button.sel { background: var(--surface); color: var(--accent); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
 .chart .nav-date b { font-size: 16px; }
@@ -264,7 +264,7 @@ details p b { color: var(--fg); }
 .list li .val b { font-family: var(--mono); }
 .list li .val b.alt { color: var(--rest); }
 .field.big input { font-size: 28px; padding: 12px 30px 12px 8px; }
-.trend .vlabel { font-family: var(--mono); font-size: 9px; font-weight: 700; fill: var(--fg); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+.trend .vlabel { font-family: var(--mono); font-size: 9.5px; font-weight: 700; fill: var(--fg); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
 .trend .vlabel.alt { fill: var(--rest); }
 
 /* v1.7: summary, undo toast */
@@ -335,3 +335,7 @@ textarea { resize: vertical; }
 .icon-btn.dot::after { content: ""; position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--rest); }
 .groups summary.plain { text-transform: none; }
 .banner.danger .btn { background: #fff; color: var(--danger); }
+.nowrap { white-space: nowrap; flex: none; }
+.cycle-bar { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+label.menu-item { display: block; cursor: pointer; }
+.trend .vlabel.last { fill: var(--accent); }

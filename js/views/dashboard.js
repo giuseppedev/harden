@@ -2,7 +2,7 @@
 import * as store from "../data.js";
 import * as gh from "../github.js";
 import * as L from "../logic.js";
-import { esc, D, ui, actions, go, cycle, byDate, lastDate } from "../core.js";
+import { esc, D, ui, actions, go, byDate, lastDate } from "../core.js";
 import { sparkline } from "../charts.js";
 import { sessionRow, sessionMinutes, startSession, openSessionView } from "./session.js";
 import { openWeightForm, openMeasureForm } from "./measures.js";
@@ -44,7 +44,7 @@ function recentRecords(d, n = 3) {
 }
 
 export function viewDashboard(d) {
-  const c = cycle();
+  const c = L.currentCycle(d);
   const chips = reminders(d).map((r) => `<button class="rchip ${r.warn ? "warn" : ""}" data-act="${r.act}">${r.icon} ${esc(r.text)} <small>${esc(r.small)}</small></button>`).join("");
   if (!c) return `${chips ? `<div class="rchips">${chips}</div>` : ""}<p class="empty">Nessun ciclo. Importa la scheda del coach dal tab Scheda.</p>`;
   const letters = L.sheetLetters(c);
@@ -70,7 +70,7 @@ function nowCard(d, c, letters) {
       <div class="row"><div><div class="big">${esc(open.sheet)}</div><div class="hint" style="font-size:13px">${esc(L.fmtDate(open.date))} · ${n} di ${slots.length} esercizi</div></div>
       <button class="btn" data-act="open-session" data-id="${open.id}">Riprendi</button></div></section>`;
   }
-  if (c.closed) return `<section class="card stack"><div class="label">Ciclo ${c.number} chiuso</div><p class="hint" style="font-size:14px">Importa la scheda nuova del coach per iniziare il prossimo ciclo.</p><button class="btn" data-act="go" data-view="program">Vai alla scheda</button></section>`;
+  if (c.closed) return `<section class="card stack"><div class="label">Ciclo ${c.number} chiuso</div><p class="hint" style="font-size:14px">Importa la scheda nuova del coach per iniziare il prossimo ciclo.</p><label class="btn" for="programFileHome">Importa la scheda nuova</label><input id="programFileHome" type="file" accept=".json,application/json" data-act="import-program-file" class="vh"></section>`;
   const sug = L.nextSuggestion(d, c);
   const slots = c.sheets[sug.sheet] || [];
   const lastSame = L.sessionsOf(d, c.id).filter((s) => s.sheet === sug.sheet && s.finishedAt).pop();
@@ -111,7 +111,7 @@ function records(d) {
 }
 
 Object.assign(actions, {
-  start: (el) => startSession(el.dataset.sheet, +el.dataset.week),
+  start: (el) => startSession(el.dataset.sheet, +el.dataset.week, null, L.currentCycle(D()).id),
   "open-session": (el) => openSessionView(el.dataset.id),
   "all-sessions": () => { ui.progTab = "sessions"; go("program"); },
   "go-weight": () => { ui.mTab = "weight"; go("measures"); openWeightForm(null); },
