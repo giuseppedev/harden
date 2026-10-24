@@ -1,9 +1,8 @@
-// Report: comparison across the selected cycles. Sections collapse; the PDF always contains all of them.
+// Report: comparison across the selected cycles, with collapsible sections.
 import * as store from "../data.js";
 import * as L from "../logic.js";
-import { esc, D, ui, actions, changes, toast, render, byDate } from "../core.js";
+import { esc, ui, changes, toast, render, byDate } from "../core.js";
 
-const ALL_SECTIONS = new Set(["sum", "cmp", "vol", "meas", "ex"]);
 const section = (title, body, open = true) => `<details class="card rep-sec" ${open ? "open" : ""}><summary><h2>${title}</h2></summary><div class="stack">${body}</div></details>`;
 
 export function viewReport(d) {
@@ -11,7 +10,7 @@ export function viewReport(d) {
   ui.rep.cycles ??= new Set(all.map((c) => c.id));
   const ids = all.filter((c) => ui.rep.cycles.has(c.id)).map((c) => c.id);
   const rep = L.reportData(d, ids), cyc = rep.cycles;
-  const filters = `<section class="card stack"><div class="row"><div class="label">Cicli</div><button class="mini" data-act="export-report">Esporta PDF</button></div>
+  const filters = `<section class="card stack"><div class="label">Cicli</div>
     <div class="chips">${all.map((c) => `<label class="chip"><input type="checkbox" data-act="rep-cycle" value="${c.id}" ${ui.rep.cycles.has(c.id) ? "checked" : ""}>Ciclo ${c.number}</label>`).join("")}</div>
     <div class="tiles">
     <div class="tile"><b>${cyc.length}</b><span>${cyc.length === 1 ? "ciclo" : "cicli"}</span></div><div class="tile"><b>${rep.sessionsDone}</b><span>sessioni fatte</span></div>
@@ -46,19 +45,6 @@ function bodyRange(d, cyc) {
     <div class="tbl-wrap"><table class="tbl"><tr><th></th><th class="num">Inizio</th><th class="num">Fine</th><th class="num">Δ</th></tr>${rows.join("")}</table></div>
     ${ws.some((w) => w.scale === "other") ? `<p class="hint">* almeno una pesata su un'altra bilancia.</p>` : ""}`;
 }
-
-Object.assign(actions, {
-  "export-report": async (el) => {
-    el.disabled = true; el.textContent = "Preparo…";
-    try {
-      const pdf = await import("../pdf.js");
-      const ids = L.cyclesSorted(D()).filter((c) => ui.rep.cycles.has(c.id)).map((c) => c.id);
-      const bytes = await pdf.reportPdf(D(), ids, ALL_SECTIONS);
-      await pdf.deliverFile(bytes, `Report Harden - ${L.todayISO()}.pdf`, "application/pdf");
-    } catch (e) { toast(e.message, { error: true }); }
-    el.disabled = false; el.textContent = "Esporta PDF";
-  },
-});
 
 Object.assign(changes, {
   "rep-cycle": (t) => { t.checked ? ui.rep.cycles.add(t.value) : ui.rep.cycles.delete(t.value); if (!ui.rep.cycles.size) { ui.rep.cycles.add(t.value); toast("Serve almeno un ciclo"); } render(); },

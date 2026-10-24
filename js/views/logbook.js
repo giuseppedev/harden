@@ -17,7 +17,7 @@ export function viewLogbook(d) {
       lines.push(`<tr class="${r.isSub ? "subrow" : ""}">${[1, 2, 3, 4].map(() => [0, 1, 2, 3].map((k) => `<td class="num ${k ? "" : "sep"}">${h * 4 + k + 1}</td>`).join("")).join("")}</tr>`);
       ["reps", "load"].forEach((f) => lines.push(`<tr>${[1, 2, 3, 4].map((w) => [0, 1, 2, 3].map((k) => { const st = r.weeks[w]?.[h * 4 + k]; const v = st ? (f === "load" ? L.fmtNum(st.load) : st.reps ?? "") : ""; return `<td class="${k ? "" : "sep"} ${st ? "filled" : ""}">${esc(v)}</td>`; }).join("")).join("")}</tr>`));
     }
-    lines[0] = lines[0].replace(/^<tr([^>]*)>/, `<tr$1><td class="name" rowspan="${halves * 3}">${idx + 1}. ${esc(L.exName(d, r.exerciseId))}${r.isSub ? `<small>(sost. di ${esc(L.exName(d, r.originalId))})</small>` : ""}</td>`);
+    lines[0] = lines[0].replace(/^<tr([^>]*)>/, `<tr$1><td class="name" rowspan="${halves * 3}">${idx + 1}. ${esc(L.exName(d, r.exerciseId))}${r.isSub ? `<small>(sost. di ${esc(L.exName(d, r.originalId))})</small>` : ""}${Object.keys(r.variants).length ? `<small class="var">${esc(L.variantSummary(r.variants))}</small>` : ""}</td>`);
     return lines.join("");
   }).join("");
   return `<section class="card stack"><div class="row"><div><div class="label">Ciclo ${c.number}${c.closed ? " · chiuso" : ""}</div><span class="hint">${esc(L.fmtRange(c.startDate, L.cycleEnd(c)))}</span></div><button class="btn small" data-act="export-logbook">Esporta PDF</button></div>

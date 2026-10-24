@@ -22,8 +22,7 @@ export function viewMeasures(d) {
   const tabs = `<div class="subtabs" role="tablist">
     <button role="tab" data-act="mtab" data-tab="weight" aria-selected="${ui.mTab === "weight"}">Peso</button>
     <button role="tab" data-act="mtab" data-tab="circ" aria-selected="${ui.mTab === "circ"}">Circonferenze</button></div>`;
-  const exportCard = `<section class="card stack"><div class="label">Esporta in PDF</div>
-    <div class="row"><button class="btn ghost small" style="flex:1" data-act="export-measures" data-mode="last">Ultime misure</button><button class="btn ghost small" style="flex:1" data-act="export-measures" data-mode="all">Storico completo</button></div></section>`;
+  const exportCard = `<section class="card row"><div><div class="label">Esporta in PDF</div><span class="hint">Ultime circonferenze e peso degli ultimi 7 giorni</span></div><button class="btn ghost small" data-act="export-measures">Esporta</button></section>`;
   return tabs + (ui.mTab === "weight" ? weightTab(ws) : circTab(ms)) + exportCard;
 }
 
@@ -171,8 +170,8 @@ Object.assign(actions, {
     const label = el.textContent; el.disabled = true; el.textContent = "Preparo il PDF…";
     try {
       const pdf = await import("../pdf.js");
-      const bytes = await pdf.measuresPdf(D(), el.dataset.mode);
-      await pdf.deliverFile(bytes, `Harden misure ${el.dataset.mode === "all" ? "storico" : "ultime"} - ${L.todayISO()}.pdf`, "application/pdf");
+      const bytes = await pdf.measuresPdf(D());
+      await pdf.deliverFile(bytes, `Misure e peso - ${L.todayISO()}.pdf`, "application/pdf");
     } catch (e) { toast(e.message, { error: true }); }
     el.disabled = false; el.textContent = label;
   },

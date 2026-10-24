@@ -328,3 +328,6 @@ details.rep-sec { margin: 0; border-top: 1px solid var(--line); padding: 14px; }
 .next .btn { white-space: nowrap; }
 .weeks-sel { background: var(--surface); border: 1px solid var(--line); }
 .weeks-sel button.sel { background: var(--accent-soft); box-shadow: none; }
+.variant-row { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; margin-top: 10px; }
+.sheet .name small.var { color: #555; font-weight: 500; font-style: italic; }
+textarea { resize: vertical; }

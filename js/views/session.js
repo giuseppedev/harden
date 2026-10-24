@@ -13,6 +13,13 @@ function lastBarFor(d, exerciseId) {
   for (const h of L.historyFor(d, exerciseId)) if (h.entry.barId) return h.entry.barId;
   return L.exerciseOf(d, exerciseId)?.defaultBarId || "";
 }
+/** Variant to preselect: the last one used, if still in the list, otherwise the first. */
+function lastVariantFor(d, exerciseId) {
+  const list = L.exerciseOf(d, exerciseId)?.variants || [];
+  if (!list.length) return "";
+  for (const h of L.historyFor(d, exerciseId)) if (h.entry.variant && list.includes(h.entry.variant)) return h.entry.variant;
+  return list[0];
+}
 function supersetLabel(slot) {
   if (slot.superset === "first") return `<span class="ss">Superset 1/2 · ${L.fmtRest(slot.rest)} poi il secondo</span>`;
   if (slot.superset === "second") return `<span class="ss">Superset 2/2 · poi ${L.fmtRest(slot.rest)}</span>`;
@@ -69,7 +76,7 @@ function exerciseCard(d, c, s, slot) {
   const prevLast = prevRaw.filter(Boolean).pop();
   const hist = L.historyFor(d, r.exerciseId, { before: s }).slice(0, 2);
   const chips = hist.length
-    ? hist.map((h) => `<span><b>${h.cycle.id === c.id ? "" : `C${h.cycle.number} `}S${h.session.week}:</b> ${L.countedSets(h).map(L.fmtSet).join(", ")}</span>`).join("")
+    ? hist.map((h) => { const v = ex.variants?.length ? L.variantOf(d, h.entry) : ""; return `<span><b>${h.cycle.id === c.id ? "" : `C${h.cycle.number} `}S${h.session.week}${v ? ` · ${esc(v)}` : ""}:</b> ${L.countedSets(h).map(L.fmtSet).join(", ")}</span>`; }).join("")
     : `<span>Mai fatto prima</span>`;
   const best = L.bestLoadBefore(d, r.exerciseId, s);
   const isPR = (st, role) => !!st?.done && role !== "warm" && best != null && st.load != null && st.load > best;
@@ -97,6 +104,8 @@ function exerciseCard(d, c, s, slot) {
   const barId = entry?.barId ?? lastBarFor(d, r.exerciseId);
   const barHtml = ex.usesBar ? `<div class="bar-row"><select data-act="bar" data-slot="${slot.id}" aria-label="Bilanciere"><option value="">Nessun bilanciere</option>${store.live(d.bars).map((b) => `<option value="${b.id}" ${b.id === barId ? "selected" : ""}>${esc(b.name)}${b.kg != null ? ` · ${L.fmtNum(b.kg)} kg` : ""}</option>`).join("")}</select>
     <div class="total" data-total="${slot.id}"></div></div>` : "";
+  const variant = entry?.variant || lastVariantFor(d, r.exerciseId);
+  const variantHtml = ex.variants?.length ? `<label class="variant-row"><span class="label">Variante</span><select data-act="variant" data-slot="${slot.id}">${ex.variants.map((v) => `<option ${v === variant ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>` : "";
   const showNote = !!entry?.note || noteOpen.has(slot.id);
   const prevNote = !entry?.note && prev?.entry.note ? prev.entry.note : "";
   const sub = r.substitution ? `<div class="subtag">⇄ Sostituisce ${esc(L.exName(d, slot.exerciseId))} · ${r.substitution === "permanent" ? "definitiva" : "solo oggi"}<button data-act="restore" data-slot="${slot.id}">Ripristina</button></div>` : "";
@@ -107,6 +116,7 @@ function exerciseCard(d, c, s, slot) {
       <button class="icon-btn" data-act="ex-menu" data-slot="${slot.id}" aria-label="Altre azioni">⋯</button></div>
     ${sub}
     <div class="hist">${chips}</div>
+    ${variantHtml}
     ${prevNote ? `<p class="hint prev-note">Ultima nota: ${esc(prevNote)}</p>` : ""}
     ${blocks || `<p class="hint" style="margin-top:10px">Nessuna serie prevista questa settimana.</p>`}
     ${extra ? `<div class="block"><span class="label">Serie extra</span>${extraRows}</div>` : ""}
@@ -132,6 +142,8 @@ function ensureEntry(d, s, slot) {
   if (!e) {
     const r = L.resolveSlot(c, slot, s);
     e = s.entries[slot.id] = { exerciseId: r.exerciseId, substitution: r.substitution, sets: [] };
+    const v = lastVariantFor(d, r.exerciseId);
+    if (v) e.variant = v;
   }
   s.updatedAt = store.now();
   return e;
@@ -432,8 +444,8 @@ export function openHistory(exerciseId) {
   const pts = hist.map((h) => ({ date: h.session.date, v: L.bestSet(L.countedSets(h))?.load })).filter((x) => x.v != null).reverse();
   openModal(`<div><div class="label">Storico e progressione</div><h2>${esc(L.exName(d, exerciseId))}</h2></div>
     ${pts.length ? `<div class="label">Carico migliore (dischi)</div>${chartBlock(`ex-${exerciseId}`, pts, "kg", "D")}` : ""}
-    ${hist.length ? `<div class="tbl-wrap"><table class="tbl"><tr><th>Data</th><th>Ciclo</th><th>Serie (kg × rip)</th></tr>
-    ${hist.map((h) => `<tr><td>${esc(L.fmtDate(h.session.date, { weekday: false, year: true }))}</td><td>C${h.cycle.number} S${h.session.week}</td><td style="white-space:normal">${L.countedSets(h).map(L.fmtSet).join(", ")}${h.entry.note ? `<br><span class="hint">${esc(h.entry.note)}</span>` : ""}</td></tr>`).join("")}</table></div>` : `<p class="hint">Nessuna serie registrata finora.</p>`}
+    ${hist.length ? `<div class="tbl-wrap"><table class="tbl"><tr><th>Data</th><th>Ciclo</th><th>Serie (rip × kg)</th></tr>
+    ${hist.map((h) => `<tr><td>${esc(L.fmtDate(h.session.date, { weekday: false, year: true }))}</td><td>C${h.cycle.number} S${h.session.week}</td><td style="white-space:normal">${L.exerciseOf(d, exerciseId)?.variants?.length ? `<b>${esc(L.variantOf(d, h.entry))}</b> · ` : ""}${L.countedSets(h).map(L.fmtSet).join(", ")}${h.entry.note ? `<br><span class="hint">${esc(h.entry.note)}</span>` : ""}</td></tr>`).join("")}</table></div>` : `<p class="hint">Nessuna serie registrata finora.</p>`}
     <button class="btn ghost" data-act="close">Chiudi</button>`);
 }
 
@@ -563,5 +575,6 @@ Object.assign(actions, {
 Object.assign(changes, {
   bar: (t) => { withEntry(t.dataset.slot, (e) => { e.barId = t.value; }); updateBarTotal(t.dataset.slot); },
   note: (t) => { withEntry(t.dataset.slot, (e) => { e.note = t.value.trim(); }); },
+  variant: (t) => { withEntry(t.dataset.slot, (e) => { e.variant = t.value; }); },
 });
 Object.assign(inputs, { "sub-search": () => renderSubList() });

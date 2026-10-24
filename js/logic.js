@@ -160,7 +160,21 @@ export function bestLoadBefore(d, exerciseId, session) {
 export function bestSet(sets) {
   return (sets || []).reduce((b, s) => (!b || (s.load ?? 0) > (b.load ?? 0) || ((s.load ?? 0) === (b.load ?? 0) && (s.reps ?? 0) > (b.reps ?? 0)) ? s : b), null);
 }
-export const fmtSet = (s) => (s.load == null ? `${s.reps ?? "–"} rip` : `${fmtNum(s.load)}×${s.reps ?? "–"}`);
+/** One set as "reps×kg": repetitions first, then the plate load with its unit. */
+export const fmtSet = (s) => (s.load == null ? `${s.reps ?? "–"} rip` : `${s.reps ?? "–"}×${fmtNum(s.load)} kg`);
+
+/* ---------- Exercise variants (e.g. progressive steps of the same movement) ---------- */
+/** Variant used in a logged entry; entries logged before variants were set count as the first one. */
+export const variantOf = (d, entry) => entry?.variant || exerciseOf(d, entry?.exerciseId)?.variants?.[0] || "";
+/** "S1–2 a terra · S3 alla sbarra" from { week: variant }, merging consecutive weeks with the same variant. */
+export function variantSummary(byWeek) {
+  const weeks = Object.keys(byWeek).map(Number).sort((a, b) => a - b), out = [];
+  for (const w of weeks) {
+    const g = out[out.length - 1];
+    if (g && g.v === byWeek[w] && g.to === w - 1) g.to = w; else out.push({ from: w, to: w, v: byWeek[w] });
+  }
+  return out.map((g) => `S${g.from}${g.to > g.from ? `–${g.to}` : ""} ${g.v}`).join(" · ");
+}
 
 /* ---------- Coach logbook ---------- */
 export function logbookRows(d, cycle, sheet) {
@@ -176,16 +190,16 @@ export function logbookRows(d, cycle, sheet) {
     const ov = cycle.overrides?.[slot.id];
     if (ov && !ids.includes(ov.exerciseId)) ids.push(ov.exerciseId);
     for (const exId of ids) {
-      const weeks = {};
+      const weeks = {}, variants = {};
       for (const s of sessions) {
         const e = s.entries?.[slot.id];
         if (!e) continue;
         const r = resolveSlot(cycle, slot, s);
         if (r.exerciseId !== exId) continue;
         const sets = [...logbookIdx(r.blocks, s.week), ...extraIdx(e, r.blocks, s.week)].map((i) => e.sets?.[i]).filter((x) => x && x.done);
-        if (sets.length) weeks[s.week] = sets;
+        if (sets.length) { weeks[s.week] = sets; const v = variantOf(d, e); if (v) variants[s.week] = v; }
       }
-      rows.push({ slotId: slot.id, exerciseId: exId, isSub: exId !== slot.exerciseId, originalId: slot.exerciseId, weeks });
+      rows.push({ slotId: slot.id, exerciseId: exId, isSub: exId !== slot.exerciseId, originalId: slot.exerciseId, weeks, variants });
     }
   }
   return rows;

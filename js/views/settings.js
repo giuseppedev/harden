@@ -69,7 +69,8 @@ function openCatalog() {
 }
 function catalogList() {
   const q = ui.catalogQuery;
-  const exs = store.live(D().exercises).filter((e) => !q || matchScore(q, e.name) > 0).sort((a, b) => a.name.localeCompare(b.name, "it"));
+  const exs = store.live(D().exercises).map((e) => ({ e, s: q ? matchScore(q, e.name) : 1 })).filter((x) => x.s > 0)
+    .sort((a, b) => b.s - a.s || a.e.name.localeCompare(b.e.name, "it")).map((x) => x.e);
   return exs.map((e) => `<div class="cat-row tap" data-act="edit-exercise" data-id="${e.id}"><span><span class="dist">${esc(e.district)}</span> ${esc(e.name)}${e.setup ? `<br><span class="hint">⚙︎ ${esc(e.setup)}</span>` : ""}</span><span class="hint">›</span></div>`).join("") || `<p class="hint">Nessun esercizio trovato.</p>`;
 }
 
@@ -83,7 +84,9 @@ function openExerciseEditor(id) {
       <label class="label" for="exDist">Distretto<select id="exDist">${L.DISTRICTS.map((x) => `<option ${x === e.district ? "selected" : ""}>${x}</option>`).join("")}</select></label>
       <label class="label" for="exBar">Bilanciere<select id="exBar"><option value="">Nessuno</option>${bars.map((b) => `<option value="${b.id}" ${e.usesBar && e.defaultBarId === b.id ? "selected" : ""}>${esc(b.name)}</option>`).join("")}<option value="any" ${e.usesBar && !e.defaultBarId ? "selected" : ""}>Sì, da scegliere</option></select></label>
       <label class="label full" for="exSetup">Regolazioni<input id="exSetup" type="text" value="${esc(e.setup || "")}" placeholder="es. schienale tacca 3, sellino 4"></label>
+      <label class="label full" for="exVariants">Varianti · una per riga, in ordine di progressione<textarea id="exVariants" rows="4" placeholder="es. a terra&#10;alla sbarra, ginocchia flesse">${esc((e.variants || []).join("\n"))}</textarea></label>
     </div>
+    <p class="hint">Con le varianti, nella sessione scegli quale stai facendo: resta la stessa riga nel logbook e nello storico.</p>
     <div class="row">${id ? `<button class="btn ghost" style="color:var(--danger)" data-confirm="delete-exercise" data-id="${id}">Elimina</button>` : ""}<button class="btn ghost" data-act="catalog-open">Annulla</button><button class="btn" data-act="save-exercise" data-id="${esc(id || "")}">Salva</button></div>`);
 }
 
@@ -120,7 +123,7 @@ Object.assign(actions, {
     const id = el.dataset.id || store.uid();
     store.mutate((d) => {
       const prev = L.exerciseOf(d, id) || {};
-      store.upsert(d, "exercises", { ...prev, id, name, district: $("#exDist").value, usesBar: !!barVal, defaultBarId: barVal && barVal !== "any" ? barVal : "", setup: $("#exSetup").value.trim() });
+      store.upsert(d, "exercises", { ...prev, id, name, district: $("#exDist").value, usesBar: !!barVal, defaultBarId: barVal && barVal !== "any" ? barVal : "", setup: $("#exSetup").value.trim(), variants: $("#exVariants").value.split("\n").map((x) => x.trim()).filter(Boolean) });
     });
     openCatalog(); toast("Esercizio salvato");
   },
