@@ -98,7 +98,7 @@ function kpis(d, c, letters, done) {
       <div class="segs">${letters.map((l) => `<i class="${inWeek.includes(l) ? "on" : ""}"></i>`).join("")}</div><span class="hint">sessioni fatte</span></div>
     <div class="kpi"><div class="label">Aderenza ciclo</div><b>${adherence != null ? `${adherence}<small>%</small>` : "–"}</b><span class="hint">${planned ? `${Math.min(done.length, planned)} di ${planned} previste` : "dalla settimana 2"}</span></div>
     <button class="kpi wide" data-act="go-weight-tab">${last ? `<div class="row"><div class="label">Peso</div><span class="hint">${esc(L.fmtDate(last.date))}</span></div>
-      <div class="row"><b>${L.fmtNum(last.kg)}<small> kg</small></b>${ref ? `<span><span class="delta">${L.fmtDelta(last.kg, ref.kg)}</span> <span class="hint">in 7 gg</span></span>` : ""}</div>${sparkline(recent.map((x) => x.kg))}`
+      <div class="row"><b>${L.fmtKg(last.kg)}<small> kg</small></b>${ref ? `<span><span class="delta">${L.fmtDelta(last.kg, ref.kg, 2)}</span> <span class="hint">in 7 gg</span></span>` : ""}</div>${sparkline(recent.map((x) => x.kg))}`
       : `<div class="label">Peso</div><span class="hint">Nessuna pesata. Tocca per registrarla.</span>`}</button>
   </div>`;
 }

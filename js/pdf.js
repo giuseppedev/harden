@@ -170,7 +170,7 @@ export async function measuresPdf(d) {
   note(`${fmtDate(from, { weekday: false })} – ${fmtDate(todayISO(), { weekday: false, year: true })}`);
   if (!ws.length) note("Nessuna pesata in questi giorni.");
   else {
-    table(["Data", "kg"], ws.map((w) => [fmtDate(w.date, { year: true }), w.kg.toFixed(1).replace(".", ",") + (w.scale === "other" ? " *" : "")]));
+    table(["Data", "kg"], ws.map((w) => [fmtDate(w.date, { year: true }), w.kg.toFixed(2).replace(".", ",") + (w.scale === "other" ? " *" : "")]));
     if (ws.some((w) => w.scale === "other")) { y -= 6; note("* pesata con un'altra bilancia (non quella personale): può esserci uno scarto."); }
   }
   stampFooter(doc, font);

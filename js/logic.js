@@ -25,11 +25,15 @@ export function fmtRest(sec) {
   return s ? `${m}:${pad(s)} min` : `${m} min`;
 }
 export const fmtNum = (n) => (n == null || n === "" ? "" : String(Math.round(n * 100) / 100).replace(".", ","));
-export function fmtDelta(a, b) {
+/** Signed difference; `decimals` fixed when given (body weight uses 2), otherwise rounded to one. */
+export function fmtDelta(a, b, decimals = null) {
   if (a == null || b == null) return "–";
-  const d = Math.round((a - b) * 10) / 10;
-  return (d > 0 ? "+" : d < 0 ? "−" : "±") + fmtNum(Math.abs(d));
+  const f = 10 ** (decimals ?? 1), d = Math.round((a - b) * f) / f;
+  const abs = decimals != null ? Math.abs(d).toFixed(decimals).replace(".", ",") : fmtNum(Math.abs(d));
+  return (d > 0 ? "+" : d < 0 ? "−" : "±") + abs;
 }
+/** Body weight, always with two decimals (77,85). */
+export const fmtKg = (n) => (n == null ? "" : n.toFixed(2).replace(".", ","));
 export function parseNum(v) {
   if (v == null) return null;
   const s = String(v).trim().replace(",", ".");

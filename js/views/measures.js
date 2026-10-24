@@ -1,7 +1,7 @@
 // Measures: weight and circumferences in two sub-tabs; entry and editing happen in bottom sheets.
 import * as store from "../data.js";
 import * as L from "../logic.js";
-import { $, $$, esc, D, ui, actions, confirmed, toast, openModal, closeModal, render, runSync, deleteWithUndo, byDate, r1, exportCard, runExport } from "../core.js";
+import { $, $$, esc, D, ui, actions, confirmed, toast, openModal, closeModal, render, runSync, deleteWithUndo, byDate, exportCard, runExport } from "../core.js";
 import { chartBlock, groupBy, MONTH_NAMES } from "../charts.js";
 
 function bodySvg() {
@@ -34,16 +34,16 @@ function weightTab(ws) {
   return `
   <section class="card stack">
     <div class="row"><div class="label">Ultimo peso · ${esc(L.fmtDate(last.date))}</div>${last.scale === "other" ? '<span class="scale-tag">altra bilancia</span>' : ""}</div>
-    <div class="big-value ${last.scale === "other" ? "alt" : ""}">${L.fmtNum(last.kg)}<small> kg</small></div>
-    <div class="deltas">${week && week !== last ? `<span>7 giorni <b>${L.fmtDelta(last.kg, week.kg)}${flag(last, week)}</b></span>` : ""}${ws.length > 1 ? `<span>Dal primo <b>${L.fmtDelta(last.kg, first.kg)}${flag(last, first)}</b></span>` : ""}<span>${ws.length} pesate</span></div>
+    <div class="big-value ${last.scale === "other" ? "alt" : ""}">${L.fmtKg(last.kg)}<small> kg</small></div>
+    <div class="deltas">${week && week !== last ? `<span>7 giorni <b>${L.fmtDelta(last.kg, week.kg, 2)}${flag(last, week)}</b></span>` : ""}${ws.length > 1 ? `<span>Dal primo <b>${L.fmtDelta(last.kg, first.kg, 2)}${flag(last, first)}</b></span>` : ""}<span>${ws.length} pesate</span></div>
     <button class="btn" data-act="weight-new">+ Registra peso</button>
   </section>
-  <section class="card stack"><h2>Andamento</h2>${chartBlock("weight", ws.map((w) => ({ date: w.date, v: w.kg, alt: w.scale === "other" })), "kg", "D", { decimals: 1 })}</section>
+  <section class="card stack"><h2>Andamento</h2>${chartBlock("weight", ws.map((w) => ({ date: w.date, v: w.kg, alt: w.scale === "other" })), "kg", "D", { decimals: 2 })}</section>
   <section class="card stack"><h2>Storico</h2>
     <div class="groups">${groupBy(ws.slice().reverse(), (w) => w.date.slice(0, 7)).map((g, gi) => {
       const [yy, mm] = g.key.split("-"), avg = g.items.reduce((a, w) => a + w.kg, 0) / g.items.length, alts = g.items.filter((w) => w.scale === "other").length;
-      return `<details ${gi === 0 ? "open" : ""}><summary><span>${MONTH_NAMES[+mm - 1]} ${yy}</span><span class="hint">media ${r1(avg)} kg · ${g.items.length}${alts ? ` · <span class="scale-tag">${alts} altra bil.</span>` : ""}</span></summary>
-        <ul class="list">${g.items.map((w) => { const pv = ws[ws.findIndex((x) => x.id === w.id) - 1]; return `<li class="tap" data-act="weight-edit" data-id="${w.id}"><span>${esc(L.fmtDate(w.date))}${w.scale === "other" ? ' <span class="scale-tag">altra</span>' : ""}</span><span class="val"><b class="${w.scale === "other" ? "alt" : ""}">${L.fmtNum(w.kg)} kg</b><span class="delta">${pv ? L.fmtDelta(w.kg, pv.kg) + flag(w, pv) : ""}</span></span></li>`; }).join("")}</ul></details>`;
+      return `<details ${gi === 0 ? "open" : ""}><summary><span>${MONTH_NAMES[+mm - 1]} ${yy}</span><span class="hint">media ${L.fmtKg(avg)} kg · ${g.items.length}${alts ? ` · <span class="scale-tag">${alts} altra bil.</span>` : ""}</span></summary>
+        <ul class="list">${g.items.map((w) => { const pv = ws[ws.findIndex((x) => x.id === w.id) - 1]; return `<li class="tap" data-act="weight-edit" data-id="${w.id}"><span>${esc(L.fmtDate(w.date))}${w.scale === "other" ? ' <span class="scale-tag">altra</span>' : ""}</span><span class="val"><b class="${w.scale === "other" ? "alt" : ""}">${L.fmtKg(w.kg)} kg</b><span class="delta">${pv ? L.fmtDelta(w.kg, pv.kg, 2) + flag(w, pv) : ""}</span></span></li>`; }).join("")}</ul></details>`;
     }).join("")}</div>
     <p class="hint">Tocca una pesata per modificarla o eliminarla. * differenza con una pesata su un'altra bilancia: può esserci uno scarto.</p>
   </section>`;

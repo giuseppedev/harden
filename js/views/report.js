@@ -36,7 +36,7 @@ function bodyRange(d, cyc) {
   const ws = store.live(d.weights).filter(inRange).sort(byDate);
   if (!ms.length && !ws.length) return `<p class="hint">Nessuna misura in questo periodo.</p>`;
   const rows = [];
-  if (ws.length) { const f = ws[0], l = ws[ws.length - 1]; rows.push(`<tr><td>Peso (kg)${f.scale === "other" || l.scale === "other" ? "*" : ""}</td><td class="num">${L.fmtNum(f.kg)}</td><td class="num">${L.fmtNum(l.kg)}</td><td class="num">${L.fmtDelta(l.kg, f.kg)}</td></tr>`); }
+  if (ws.length) { const f = ws[0], l = ws[ws.length - 1]; rows.push(`<tr><td>Peso (kg)${f.scale === "other" || l.scale === "other" ? "*" : ""}</td><td class="num">${L.fmtKg(f.kg)}</td><td class="num">${L.fmtKg(l.kg)}</td><td class="num">${L.fmtDelta(l.kg, f.kg, 2)}</td></tr>`); }
   if (ms.length) {
     const f = ms[0], l = ms[ms.length - 1];
     L.MEASURES.forEach((m) => rows.push(`<tr><td>${m.name}</td><td class="num">${L.fmtNum(f.values[m.k]) || "–"}</td><td class="num">${L.fmtNum(l.values[m.k]) || "–"}</td><td class="num">${L.fmtDelta(l.values[m.k], f.values[m.k])}</td></tr>`));

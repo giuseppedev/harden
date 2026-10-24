@@ -4,7 +4,7 @@ import * as store from "./data.js";
 import * as gh from "./github.js";
 import * as L from "./logic.js";
 
-export const APP_VERSION = "2.3.0";
+export const APP_VERSION = "2.3.1";
 export const TAGLINE = "every set, on record.";
 export const $ = (s, root = document) => root.querySelector(s);
 export const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -47,7 +47,6 @@ export const cycle = () => D()?.cycles.find((c) => c.id === ui.cycleId && !c.del
 export const sessionById = (id) => D()?.sessions.find((s) => s.id === id && !s.deleted);
 export const cycleOfSession = (s) => D().cycles.find((c) => c.id === s.cycleId);
 export const byDate = (a, b) => (a.date > b.date ? 1 : -1);
-export const r1 = (v) => L.fmtNum(Math.round(v * 10) / 10);
 export const lastDate = (list) => store.live(list).reduce((a, x) => (x.date > a ? x.date : a), "");
 
 /* ---------- Toasts and bottom sheets ---------- */

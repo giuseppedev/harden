@@ -4,7 +4,7 @@ import * as L from "./logic.js";
 
 const chartData = {};
 
-/** `decimals` fixes the number of decimals shown (e.g. 1 for body weight: 78,0). */
+/** `decimals` fixes the number of decimals shown (e.g. 2 for body weight: 77,85). */
 export function chartBlock(id, points, unit, defaultGran, { table = false, decimals = null } = {}) {
   chartData[id] = { points, unit, table, decimals };
   ui.charts[id] ??= { g: defaultGran, off: 0 };
@@ -26,7 +26,7 @@ function chartInner(id) {
   // A window holds at most 12 points (months of a year), so the whole period always fits the width.
   const W = 320, pl = 18, pr = 18, pt = 22, pb = 30, H = 150, n = filled.length;
   const tight = n > 1 && (W - pl - pr) / (n - 1) < 34; // labels alternate above and below the dots
-  const round = (v) => Math.round(v * 10) / 10;
+  const f = 10 ** (decimals ?? 1), round = (v) => Math.round(v * f) / f;
   const fmt = (v) => (decimals != null ? round(v).toFixed(decimals).replace(".", ",") : L.fmtNum(round(v)));
   let lo = Math.min(...filled.map((b) => b.v)), hi = Math.max(...filled.map((b) => b.v));
   if (hi - lo < 1) { const m = (hi + lo) / 2; lo = m - 0.5; hi = m + 0.5; }
@@ -46,11 +46,11 @@ function chartInner(id) {
     ${area ? `<path class="area" d="${area}"/>` : ""}<path class="line" d="${path}"/>${cols}</svg>`;
   const lastB = filled[n - 1];
   const vals = filled.map((b) => b.v), avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-  const summary = `<div class="chart-sum"><span>Media <b>${fmt(avg)}</b></span><span>Min <b>${fmt(Math.min(...vals))}</b></span><span>Max <b>${fmt(Math.max(...vals))}</b></span>${filled.length > 1 ? `<span>Variazione <b>${L.fmtDelta(Math.round(lastB.v * 10) / 10, Math.round(filled[0].v * 10) / 10)}</b></span>` : ""}</div>`;
+  const summary = `<div class="chart-sum"><span>Media <b>${fmt(avg)}</b></span><span>Min <b>${fmt(Math.min(...vals))}</b></span><span>Max <b>${fmt(Math.max(...vals))}</b></span>${filled.length > 1 ? `<span>Variazione <b>${L.fmtDelta(lastB.v, filled[0].v, decimals)}</b></span>` : ""}</div>`;
   const altNote = filled.some((b) => b.alt) ? `<p class="hint"><span class="alt-dot"></span> Punti arancioni: ${st.g === "D" ? "pesata" : "periodo con almeno una pesata"} su un'altra bilancia, può esserci uno scarto.</p>` : "";
   const note = (st.g === "D" ? "" : `<p class="hint">Ogni punto è la media del periodo.</p>`) + altNote;
   const tbl = table ? `<div class="tbl-wrap"><table class="tbl"><tr><th>Periodo</th><th class="num">${unit}</th><th class="num">vs prec.</th><th class="num">valori</th></tr>
-    ${filled.slice().reverse().map((b, j, a) => `<tr><td>${esc(b.label)}${b.alt ? ' <span class="scale-tag">altra bil.</span>' : ""}</td><td class="num">${fmt(b.v)}</td><td class="num delta">${a[j + 1] ? L.fmtDelta(Math.round(b.v * 10) / 10, Math.round(a[j + 1].v * 10) / 10) : ""}</td><td class="num">${b.n}</td></tr>`).join("")}</table></div>` : "";
+    ${filled.slice().reverse().map((b, j, a) => `<tr><td>${esc(b.label)}${b.alt ? ' <span class="scale-tag">altra bil.</span>' : ""}</td><td class="num">${fmt(b.v)}</td><td class="num delta">${a[j + 1] ? L.fmtDelta(b.v, a[j + 1].v, decimals) : ""}</td><td class="num">${b.n}</td></tr>`).join("")}</table></div>` : "";
   return seg + nav + svg + summary + note + tbl;
 }
 
