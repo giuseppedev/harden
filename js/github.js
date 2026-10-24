@@ -99,7 +99,7 @@ let running = null;
  * Pull, merge, push. Local and remote changes are merged record by record,
  * so editing from two devices never loses a session.
  */
-export function sync(message = "Aggiornamento Harden") {
+export function sync(message = "chore: sync pending changes") {
   if (running) return running;
   running = (async () => {
     if (!isConfigured()) throw new SyncError("Collega prima il repository GitHub nelle impostazioni.", 0);

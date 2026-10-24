@@ -3,7 +3,7 @@ import * as store from "./data.js";
 import * as gh from "./github.js";
 import * as L from "./logic.js";
 
-const APP_VERSION = "1.1.1";
+const APP_VERSION = "1.2.0";
 const TAGLINE = "every set, on record.";
 const $ = (s, root = document) => root.querySelector(s);
 const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -392,7 +392,7 @@ async function finishSession() {
   saveTimer(null); drawTimer();
   go("home");
   toast("Sessione salvata");
-  await runSync(`Sessione ${s.sheet} – sett. ${s.week} – ${s.date}`, { quiet: false });
+  await runSync(`feat: log session ${s.sheet} week ${s.week} (${s.date})`, { quiet: false });
 }
 
 /* ---------- Substitution ---------- */
@@ -740,7 +740,7 @@ async function exportJson() {
 const actions = {
   go: (el) => go(el.dataset.view),
   close: () => closeModal(),
-  sync: () => runSync("Sincronizzazione manuale"),
+  sync: () => runSync("chore: sync pending changes"),
   "open-session": (el) => go("workout", { sessionId: el.dataset.id }),
   start: (el) => startSession(el.dataset.sheet, +el.dataset.week),
   "past-session": () => {
@@ -830,7 +830,7 @@ const actions = {
       const ex = store.live(d.weights).find((w) => w.date === date);
       store.upsert(d, "weights", { id: ex?.id || store.uid(), date, kg });
     });
-    render(); toast("Peso salvato"); runSync(`Peso ${date}`, { quiet: true });
+    render(); toast("Peso salvato"); runSync(`feat: log weight (${date})`, { quiet: true });
   },
   "edit-weight": (el) => {
     const w = D().weights.find((x) => x.id === el.dataset.id);
@@ -851,7 +851,7 @@ const actions = {
       store.upsert(d, "measurements", { id: same?.id || store.uid(), date, values: { ...(same?.values || {}), ...values } });
     });
     ui.measureEdit = null; render(); toast(editing ? "Misurazione aggiornata" : "Misure salvate");
-    runSync(`Misure ${date}`, { quiet: true });
+    runSync(`feat: log measurements (${date})`, { quiet: true });
   },
   "edit-measure": (el) => { ui.measureEdit = el.dataset.id; render(); $("#mDate")?.scrollIntoView({ block: "center" }); },
   "measure-cancel": () => { ui.measureEdit = null; render(); },
@@ -886,7 +886,7 @@ const actions = {
 
 // Two-tap confirmations: first tap arms the button, second tap runs the action.
 const confirmed = {
-  "delete-session": (id) => { store.mutate((d) => store.softDelete(d, "sessions", id)); render(); toast("Sessione eliminata"); runSync("Sessione eliminata", { quiet: true }); },
+  "delete-session": (id) => { store.mutate((d) => store.softDelete(d, "sessions", id)); render(); toast("Sessione eliminata"); runSync("fix: remove session", { quiet: true }); },
   "delete-weight": (id) => { store.mutate((d) => store.softDelete(d, "weights", id)); render(); toast("Peso eliminato"); },
   "delete-measure": (id) => { store.mutate((d) => store.softDelete(d, "measurements", id)); if (ui.measureEdit === id) ui.measureEdit = null; render(); toast("Misurazione eliminata"); },
   "delete-bar": (id) => { store.mutate((d) => store.softDelete(d, "bars", id)); render(); },
@@ -973,7 +973,7 @@ document.addEventListener("change", async (e) => {
       if (!Array.isArray(incoming.cycles)) throw new Error("Questo file non contiene dati di Harden.");
       store.replace(store.hasData() ? store.merge(D(), incoming) : incoming, { dirty: true });
       ui.cycleId = null; toast("Dati importati"); go("home");
-      runSync("Import dati", { quiet: true });
+      runSync("feat: import data backup", { quiet: true });
     } catch (err) { toast(err.message, { error: true }); }
     t.value = "";
     return;
@@ -985,7 +985,7 @@ document.addEventListener("change", async (e) => {
         <label class="label" for="progStart">Data di inizio<input id="progStart" type="date" value="${esc(p.startDate || L.todayISO())}"></label>
         <div class="row"><button class="btn ghost" data-act="close">Annulla</button><button class="btn" id="progOk">Importa</button></div>`);
       $("#progOk").onclick = () => {
-        try { importProgram(p, $("#progStart").value); closeModal(); ui.cycleId = null; go("home"); toast("Nuova scheda importata"); runSync("Nuova scheda", { quiet: true }); }
+        try { importProgram(p, $("#progStart").value); closeModal(); ui.cycleId = null; go("home"); toast("Nuova scheda importata"); runSync("feat: import new cycle program", { quiet: true }); }
         catch (err) { toast(err.message, { error: true }); }
       };
     } catch (err) { toast(err.message, { error: true }); }
@@ -1015,12 +1015,12 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
     drawTimer();
     if (ui.view === "workout") wakeLock(true);
-    if (gh.isConfigured() && navigator.onLine) runSync("Aggiornamento", { quiet: true });
+    if (gh.isConfigured() && navigator.onLine) runSync("chore: sync pending changes", { quiet: true });
   } else if (store.isDirty() && gh.isConfigured() && navigator.onLine) {
-    runSync("Salvataggio automatico", { quiet: true });
+    runSync("chore: sync pending changes", { quiet: true });
   }
 });
-window.addEventListener("online", () => { if (store.isDirty()) runSync("Sincronizzazione in coda", { quiet: true }); else renderHeader(); });
+window.addEventListener("online", () => { if (store.isDirty()) runSync("chore: sync pending changes", { quiet: true }); else renderHeader(); });
 window.addEventListener("offline", renderHeader);
 
 $("#tPlus").addEventListener("click", () => { const t = timerState(); if (!t) return; t.endAt = Math.max(t.endAt, Date.now()) + 15000; t.total += 15; beeped = false; saveTimer(t); drawTimer(); });
@@ -1033,7 +1033,7 @@ const open = store.get() && L.openSession(store.get());
 if (open) { ui.view = "workout"; ui.sessionId = open.id; }
 render();
 drawTimer();
-if (gh.isConfigured() && navigator.onLine) runSync("Aggiornamento", { quiet: true });
+if (gh.isConfigured() && navigator.onLine) runSync("chore: sync pending changes", { quiet: true });
 
 if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js").catch((e) => console.warn("Service worker not registered", e));

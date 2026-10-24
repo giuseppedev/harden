@@ -36,7 +36,7 @@ Il token può leggere e scrivere solo quel repository. Resta salvato solo sul te
 ## Come funziona la sincronizzazione
 
 - Ogni serie viene salvata subito sul telefono, anche senza rete.
-- Quando premi **Termina sessione** l'app sincronizza da sola con GitHub (un commit per sessione). Se sei offline resta in coda e parte appena torna la rete.
+- Quando premi **Termina sessione** l'app sincronizza da sola con GitHub (un commit per sessione, in formato Conventional Commits: `feat: log session A week 2 (2026-10-26)`). Se sei offline resta in coda e parte appena torna la rete.
 - Sincronizza anche quando salvi peso o misure, quando esci dall'app con modifiche in sospeso e quando la riapri.
 - Se modifichi da due dispositivi, le modifiche vengono unite elemento per elemento: vince la versione più recente.
 
