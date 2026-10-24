@@ -1,9 +1,11 @@
 // Offline support: app files are served from the cache and refreshed in the background.
 // Bump VERSION whenever you upload new app files.
-const VERSION = "harden-1.5.0";
+const VERSION = "harden-2.0.0";
 const SHELL = [
   "./", "index.html", "styles.css", "manifest.webmanifest",
-  "js/app.js", "js/data.js", "js/logic.js", "js/github.js", "js/pdf.js",
+  "js/app.js", "js/core.js", "js/timer.js", "js/charts.js", "js/data.js", "js/logic.js", "js/github.js", "js/pdf.js",
+  "js/views/dashboard.js", "js/views/session.js", "js/views/program.js", "js/views/measures.js",
+  "js/views/report.js", "js/views/logbook.js", "js/views/settings.js",
   "vendor/pdf-lib.min.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png",
 ];
@@ -21,8 +23,7 @@ self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   if (url.hostname === "api.github.com") return; // sync always goes to the network
   const sameOrigin = url.origin === self.location.origin;
-  const fonts = url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com";
-  if (!sameOrigin && !fonts) return;
+  if (!sameOrigin) return;
   e.respondWith(
     caches.open(VERSION).then(async (cache) => {
       const cached = await cache.match(e.request, { ignoreSearch: sameOrigin });
