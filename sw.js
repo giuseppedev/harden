@@ -1,6 +1,6 @@
 // Offline support: app files are served from the cache and refreshed in the background.
 // Bump VERSION whenever you upload new app files.
-const VERSION = "harden-2.4.0";
+const VERSION = "harden-2.5.0";
 const SHELL = [
   "./", "index.html", "styles.css", "manifest.webmanifest",
   "js/app.js", "js/core.js", "js/reminders.js", "js/timer.js", "js/charts.js", "js/data.js", "js/logic.js", "js/github.js", "js/pdf.js",
@@ -11,7 +11,8 @@ const SHELL = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: "reload" skips the HTTP cache, so a release never mixes old and new modules.
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (e) => {

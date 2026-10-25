@@ -2,6 +2,7 @@
 import * as store from "../data.js";
 import * as gh from "../github.js";
 import * as L from "../logic.js";
+import * as pdf from "../pdf.js";
 import { $, esc, D, ui, actions, confirmed, changes, inputs, toast, openModal, closeModal, render, renderHeader, go, deleteWithUndo, runSync, APP_VERSION } from "../core.js";
 import { platesOf, matchScore } from "./session.js";
 import { readJsonFile } from "./program.js";
@@ -96,7 +97,7 @@ function openExerciseEditor(id) {
 }
 
 async function exportJson() {
-  const { deliverFile } = await import("../pdf.js");
+  const { deliverFile } = pdf;
   const bytes = new TextEncoder().encode(JSON.stringify(D(), null, 1));
   await deliverFile(bytes, `harden-data-${L.todayISO()}.json`, "application/json");
 }
@@ -106,15 +107,18 @@ Object.assign(actions, {
     <button class="btn ghost small" data-confirm="gh-download">Scarica da GitHub e sostituisci i dati del telefono</button>
     <button class="btn ghost" data-act="close">Chiudi</button>`),
   "gh-save": async () => {
+    const prevCfg = gh.getConfig(), prevToken = gh.getToken();
+    const revert = () => { gh.setConfig(prevCfg); gh.setToken(prevToken); renderHeader(); };
     gh.setConfig({ owner: $("#ghOwner").value.trim(), repo: $("#ghRepo").value.trim(), branch: $("#ghBranch").value.trim() || "main", path: $("#ghPath").value.trim() || "harden-data.json", expiry: $("#ghExpiry").value, device: $("#ghDevice").value.trim() });
     gh.setToken($("#ghToken").value.trim());
     if (!gh.isConfigured()) { toast("Compila utente, repository e token"); renderHeader(); return; }
     try {
       const r = await gh.testConnection();
-      if (!r.private) toast("Attenzione: il repository è pubblico. I tuoi dati sarebbero visibili a tutti.", { error: true, ms: 6000 });
-      else if (!store.hasData() && r.fileExists) { await gh.downloadReplace(); closeModal(); toast("Dati scaricati da GitHub"); go("home"); return; }
+      // Never sync body and payment data to a public repository: keep the previous settings.
+      if (!r.private) { revert(); toast("Il repository è pubblico: i tuoi dati sarebbero visibili a tutti. Rendilo privato o scegline un altro.", { error: true, ms: 7000 }); return; }
+      if (!store.hasData() && r.fileExists) { await gh.downloadReplace(); closeModal(); toast("Dati scaricati da GitHub"); go("home"); return; }
       else toast(r.fileExists ? "Connessione riuscita" : "Connessione riuscita: il file verrà creato alla prima sincronizzazione");
-    } catch (e) { toast(e.message, { error: true, ms: 5000 }); }
+    } catch (e) { revert(); toast(e.message, { error: true, ms: 5000 }); return; }
     closeModal(); render();
   },
   "gear-edit": () => openGear(),
@@ -139,6 +143,20 @@ Object.assign(confirmed, {
   "delete-bar": (id) => deleteWithUndo("bars", id, "Bilanciere eliminato"),
   "delete-exercise": (id) => deleteWithUndo("exercises", id, "Esercizio rimosso dal catalogo (lo storico resta)"),
   "gh-download": async () => {
+    if (store.isDirty()) {
+      openModal(`<h2>Modifiche non inviate</h2><p class="hint" style="font-size:14px">Su questo telefono ci sono modifiche non ancora sincronizzate. Se scarichi e sostituisci, le perdi.</p>
+        <button class="btn" data-act="sync-then-close">Invia prima le modifiche</button>
+        <button class="btn ghost" style="color:var(--danger)" data-act="gh-download-force">Sostituisci comunque</button>
+        <button class="btn ghost" data-act="close">Annulla</button>`);
+      return;
+    }
+    actions["gh-download-force"]();
+  },
+});
+
+Object.assign(actions, {
+  "sync-then-close": async () => { closeModal(); await runSync("chore: sync pending changes"); },
+  "gh-download-force": async () => {
     try { await gh.downloadReplace(); closeModal(); toast("Dati scaricati da GitHub"); ui.cycleId = null; go("home"); }
     catch (e) { toast(e.message, { error: true, ms: 5000 }); }
   },

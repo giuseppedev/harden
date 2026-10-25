@@ -51,9 +51,36 @@ export const barOf = (d, id) => d.bars.find((b) => b.id === id);
 
 /* ---------- Cycles ---------- */
 export const cyclesSorted = (d) => live(d.cycles).sort((a, b) => a.number - b.number);
+/** The cycle in progress: the newest one already started and not closed (a program imported ahead of its start waits). */
 export function currentCycle(d) {
-  const cs = cyclesSorted(d);
-  return cs.filter((c) => !c.closed).pop() || cs[cs.length - 1] || null;
+  const cs = cyclesSorted(d), today = todayISO();
+  const started = cs.filter((c) => c.startDate <= today);
+  return started.filter((c) => !c.closed).pop() || started.pop() || cs[0] || null;
+}
+/** Close every open cycle once a newer one has started (unless reopened by hand); returns true when something changed. */
+export function closeSupersededCycles(d, now) {
+  const today = todayISO();
+  let changed = false;
+  for (const c of cyclesSorted(d)) {
+    const next = cyclesSorted(d).find((x) => x.number > c.number && x.startDate <= today);
+    if (!c.closed && !c.keepOpen && next) { c.closed = true; c.closedAt = now; c.updatedAt = now; changed = true; }
+  }
+  return changed;
+}
+/**
+ * Older data: a session using a permanent substitution read its scheme from the cycle override, so removing
+ * the override rewrote history. Freeze the scheme into each such entry; returns true when something changed.
+ */
+export function freezeSubstitutionSchemas(d, now) {
+  let changed = false;
+  for (const s of live(d.sessions)) {
+    const c = d.cycles.find((x) => x.id === s.cycleId);
+    for (const [slotId, e] of Object.entries(s.entries || {})) {
+      const ov = c?.overrides?.[slotId];
+      if (e.substitution && !e.schema && ov?.schema && ov.exerciseId === e.exerciseId) { e.schema = ov.schema; s.updatedAt = now; changed = true; }
+    }
+  }
+  return changed;
 }
 export const sheetLetters = (c) => Object.keys(c?.sheets || {});
 export const cycleEnd = (c) => addDays(c.startDate, c.weeks * 7 - 1);
@@ -357,6 +384,25 @@ export function bucketSeries(points, g, offset = 0) {
   return { buckets, title: win.title, hasOlder: win.from > oldest, hasNewer: offset > 0 };
 }
 export function daysSince(date) { return date ? daysBetween(date, todayISO()) : Infinity; }
+
+/* ---------- Coaching payments ---------- */
+const LATE_AFTER_DAYS = 30, SOON_DAYS = 3;
+/** Coaching programs, newest first. */
+export const plansOf = (d) => live(d.plans || []).sort((a, b) => b.number - a.number);
+/** Paid instalments of a program and the next one: due 30 days after the previous payment (or the program start). */
+export function statusOf(d, plan) {
+  const pays = live(d.payments || []).filter((p) => p.planId === plan.id).sort((a, b) => (a.date > b.date ? 1 : -1));
+  const paid = pays.reduce((a, p) => a + (p.amount || 0), 0);
+  const ref = pays.length ? pays[pays.length - 1].date : plan.startDate;
+  const left = Math.max(0, plan.count - pays.length);
+  const dueBy = addDays(ref, LATE_AFTER_DAYS);
+  return { plan, pays, paid, left, next: pays.length + 1, dueBy, due: left ? deadline(dueBy, SOON_DAYS) : { state: "ok" } };
+}
+/** Status of the current (newest) program, or null. */
+export function planStatus(d) {
+  const plan = plansOf(d)[0];
+  return plan ? statusOf(d, plan) : null;
+}
 
 /* ---------- Deadlines (reminders) ---------- */
 /** Days left until `due` (negative once overdue) and state: "ok", "soon" within `window` days, "over" after; no date counts as overdue. */

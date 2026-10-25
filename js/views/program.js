@@ -161,10 +161,16 @@ export function readJsonFile(input) {
 /** Program file from the coach PDF: creates a new cycle and closes the running one. */
 function importProgram(p, startDate) {
   if (p.type !== "gymlog-program" || !p.sheets) throw new Error("Questo file non è una scheda di Harden.");
+  const start = startDate || p.startDate;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start || "")) throw new Error("Scegli la data di inizio del ciclo.");
+  const weeks = p.weeks || 4;
+  for (const [letter, list] of Object.entries(p.sheets)) {
+    if (!/^[A-Z0-9]{1,3}$/.test(letter) || !Array.isArray(list) || !list.length) throw new Error(`Scheda "${letter}" non valida nel file.`);
+    for (const x of list) if (!x.name || !Array.isArray(x.blocks) || !x.blocks.length) throw new Error(`Esercizio senza nome o senza serie nella scheda ${letter}.`);
+  }
   store.mutate((d) => {
     const byName = new Map(store.live(d.exercises).map((e) => [L.norm(e.name), e]));
     const number = Math.max(0, ...store.live(d.cycles).map((c) => c.number)) + 1;
-    for (const c of store.live(d.cycles)) if (!c.closed) { c.closed = true; c.closedAt = store.now(); c.updatedAt = store.now(); }
     const sheets = {};
     for (const [letter, list] of Object.entries(p.sheets)) {
       sheets[letter] = list.map((x, i) => {
@@ -173,7 +179,9 @@ function importProgram(p, startDate) {
         return { id: `${letter}${i + 1}`, exerciseId: ex.id, district: x.district, rest: x.rest, superset: x.superset || null, tut: x.tut || "", video: x.video || "", description: x.description || "", exerciseNote: x.exerciseNote || "", progressionNote: x.progressionNote || "", week4Plus: !!x.week4Plus, blocks: x.blocks };
       });
     }
-    store.upsert(d, "cycles", { id: store.uid(), number, startDate: startDate || p.startDate, weeks: p.weeks || 4, dayPlan: p.dayPlan || {}, closed: false, overrides: {}, sheets });
+    store.upsert(d, "cycles", { id: store.uid(), number, startDate: start, weeks, dayPlan: p.dayPlan || {}, closed: false, overrides: {}, sheets });
+    // The running cycle closes when the new one starts: today if it starts today, otherwise on that day.
+    L.closeSupersededCycles(d, store.now());
   });
 }
 
@@ -228,14 +236,14 @@ Object.assign(actions, {
         <label class="menu-item" for="programFile">＋ Nuovo ciclo dalla scheda del coach</label>
         ${c.closed ? `<button class="menu-item" data-act="reopen-cycle" data-id="${c.id}">↺ Riapri ciclo ${c.number}</button>` : `<button class="menu-item" data-confirm="close-cycle" data-id="${c.id}">Chiudi ciclo ${c.number}</button>`}
       </div>
-      <p class="hint">Con un ciclo nuovo quello in corso si chiude da solo. I cicli chiusi restano consultabili e modificabili.</p>
+      <p class="hint">Il ciclo in corso si chiude da solo il giorno in cui inizia quello nuovo. I cicli chiusi restano consultabili e modificabili.</p>
       <button class="btn ghost" data-act="close">Chiudi</button>`);
   },
-  "reopen-cycle": (el) => { store.mutate((d) => { const c = d.cycles.find((x) => x.id === el.dataset.id); c.closed = false; c.updatedAt = store.now(); }); closeModal(); render(); toast("Ciclo riaperto"); },
+  "reopen-cycle": (el) => { store.mutate((d) => { const c = d.cycles.find((x) => x.id === el.dataset.id); c.closed = false; c.keepOpen = true; c.updatedAt = store.now(); }); closeModal(); render(); toast("Ciclo riaperto"); },
 });
 
 Object.assign(confirmed, {
-  "close-cycle": (id) => { store.mutate((d) => { const c = d.cycles.find((x) => x.id === id); c.closed = true; c.closedAt = store.now(); c.updatedAt = store.now(); }); closeModal(); render(); toast("Ciclo chiuso"); },
+  "close-cycle": (id) => { store.mutate((d) => { const c = d.cycles.find((x) => x.id === id); c.closed = true; delete c.keepOpen; c.closedAt = store.now(); c.updatedAt = store.now(); }); closeModal(); render(); toast("Ciclo chiuso"); },
 });
 
 Object.assign(changes, {
@@ -243,7 +251,7 @@ Object.assign(changes, {
   "import-program-file": async (t) => {
     try {
       const p = await readJsonFile(t);
-      openModal(`<h2>Nuova scheda</h2><p class="hint" style="font-size:14px">Il ciclo in corso verrà chiuso e ne inizierà uno nuovo con questa scheda.</p>
+      openModal(`<h2>Nuova scheda</h2><p class="hint" style="font-size:14px">Il ciclo in corso continua fino alla data di inizio della scheda nuova, poi si chiude da solo.</p>
         <label class="label" for="progStart">Data di inizio<input id="progStart" type="date" value="${esc(p.startDate || L.todayISO())}"></label>
         <div class="row"><button class="btn ghost" data-act="close">Annulla</button><button class="btn" id="progOk">Importa</button></div>`);
       $("#progOk").onclick = () => {

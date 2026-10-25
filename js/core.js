@@ -3,8 +3,9 @@
 import * as store from "./data.js";
 import * as gh from "./github.js";
 import * as L from "./logic.js";
+import * as pdf from "./pdf.js";
 
-export const APP_VERSION = "2.4.0";
+export const APP_VERSION = "2.5.0";
 export const TAGLINE = "every set, on record.";
 export const $ = (s, root = document) => root.querySelector(s);
 export const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -19,10 +20,13 @@ export const ui = {
   sheet: null, // sheet shown in Scheda and Logbook
   week: null, // week shown in Scheda › Programma
   progTab: "program",
-  rep: { cycles: null, ex: null },
+  rep: { off: new Set() }, // report: cycles switched off
+  mTab: "weight", // measures sub-tab: weight | circ
+  circMeasure: "waist",
   measureActive: "neck",
   measureEdit: null,
   weightEdit: null,
+  weightScale: "home",
   charts: {},
   catalogQuery: "",
   syncState: "idle", // idle | running | error
@@ -107,7 +111,6 @@ export async function runExport(el, build) {
   const label = el.textContent;
   el.disabled = true; el.textContent = "Preparo…";
   try {
-    const pdf = await import("./pdf.js");
     const { bytes, name } = await build(pdf);
     await pdf.deliverFile(bytes, name, "application/pdf");
   } catch (e) { toast(e.message, { error: true }); }

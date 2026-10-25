@@ -17,7 +17,6 @@ function bodySvg() {
 }
 
 export function viewMeasures(d) {
-  ui.mTab ??= "weight";
   const ws = store.live(d.weights).sort(byDate);
   const ms = store.live(d.measurements).sort(byDate);
   const tabs = `<div class="subtabs" role="tablist">
@@ -54,7 +53,6 @@ function weightTab(ws, rem) {
 function circTab(ms, rem) {
   const last = ms[ms.length - 1], prev = ms[ms.length - 2];
   if (!last) return `<section class="card stack"><h2>Circonferenze</h2><p class="hint" style="font-size:14px">Prendi le misure una volta a settimana, sempre nelle stesse condizioni.</p><button class="btn" data-act="measure-new">+ Nuova misurazione</button></section>`;
-  ui.circMeasure ??= "waist";
   const k = ui.circMeasure, m = L.MEASURES.find((x) => x.k === k);
   const pts = ms.filter((e) => e.values[k] != null).map((e) => ({ date: e.date, v: e.values[k] }));
   return `
@@ -138,9 +136,10 @@ Object.assign(actions, {
     const kg = L.parseNum($("#wVal").value), date = $("#wDate").value;
     if (kg == null || !date) { toast("Inserisci data e peso in kg"); return; }
     const editId = ui.weightEdit, scale = ui.weightScale || "home";
+    const clash = store.live(D().weights).find((w) => w.date === date && w.id !== editId);
+    if (editId && clash) { toast(`C'è già una pesata il ${L.fmtDate(date, { weekday: false })}: modifica o elimina quella.`, { error: true }); return; }
     store.mutate((d) => {
       const sameDay = store.live(d.weights).find((w) => w.date === date && w.id !== editId);
-      if (editId && sameDay) store.softDelete(d, "weights", sameDay.id);
       store.upsert(d, "weights", { id: editId || sameDay?.id || store.uid(), date, kg, scale });
     });
     ui.weightEdit = null; ui.weightScale = null;

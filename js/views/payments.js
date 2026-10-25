@@ -3,30 +3,13 @@
 // the previous payment (or the start of the program). Older programs stay viewable and editable.
 import * as store from "../data.js";
 import * as L from "../logic.js";
-import { $, esc, D, actions, confirmed, toast, openModal, closeModal, render, runSync, deleteWithUndo, byDate } from "../core.js";
+import { $, esc, D, actions, confirmed, toast, openModal, closeModal, render, runSync, deleteWithUndo } from "../core.js";
 
-const LATE_AFTER_DAYS = 30, SOON_DAYS = 3;
 const eur = (n) => `${Number(n || 0).toLocaleString("it-IT", { maximumFractionDigits: 2, useGrouping: "always" })} €`;
 const dateY = (s) => L.fmtDate(s, { weekday: false, year: true });
 const period = (p) => `${dateY(p.startDate)} – ${dateY(p.endDate)}`;
-/** Programs, newest first. */
-const plansOf = (d) => store.live(d.plans || []).sort((a, b) => b.number - a.number);
+const { plansOf, statusOf } = L;
 const planById = (d, id) => store.live(d.plans || []).find((p) => p.id === id);
-const paymentsOf = (d, plan) => store.live(d.payments || []).filter((p) => p.planId === plan.id).sort(byDate);
-
-function statusOf(d, plan) {
-  const pays = paymentsOf(d, plan);
-  const paid = pays.reduce((a, p) => a + (p.amount || 0), 0);
-  const ref = pays.length ? pays[pays.length - 1].date : plan.startDate;
-  const left = Math.max(0, plan.count - pays.length);
-  const dueBy = L.addDays(ref, LATE_AFTER_DAYS);
-  return { plan, pays, paid, left, next: pays.length + 1, dueBy, due: left ? L.deadline(dueBy, SOON_DAYS) : { state: "ok" } };
-}
-/** Status of the current (newest) program, or null; `dueBy` is the last day to pay the next instalment. */
-export function planStatus(d) {
-  const plan = plansOf(d)[0];
-  return plan ? statusOf(d, plan) : null;
-}
 
 const summary = (st) => (st.left ? `${st.pays.length} di ${st.plan.count} rate · ${eur(st.paid)} di ${eur(st.plan.total)}` : `saldato · ${eur(st.paid)}`);
 const paymentList = (st) => `<ul class="list">${st.pays.slice().reverse().map((p, i) => `<li class="tap" data-act="pay-edit" data-id="${p.id}"><span>Rata ${st.pays.length - i} · ${esc(dateY(p.date))}</span><span class="val"><b>${eur(p.amount)}</b> ›</span></li>`).join("")}</ul>`;

@@ -46,7 +46,7 @@ function nowCard(d, c, letters) {
     const slots = oc.sheets[open.sheet] || [];
     const n = slots.filter((sl) => L.doneSets(open.entries?.[sl.id]).length).length;
     return `<section class="card next stack"><div class="label">In corso · settimana ${open.week}</div>
-      <div class="row"><div><div class="big">${esc(open.sheet)}</div><div class="hint" style="font-size:13px">${esc(L.fmtDate(open.date))} · ${n} di ${slots.length} esercizi</div></div>
+      <div class="row"><div><div class="big">${esc(open.sheet)}</div><div class="hint" style="font-size:14px">${esc(L.fmtDate(open.date))} · ${n} di ${slots.length} esercizi</div></div>
       <button class="btn" data-act="open-session" data-id="${open.id}">Riprendi</button></div></section>`;
   }
   if (c.closed) return `<section class="card stack"><div class="label">Ciclo ${c.number} chiuso</div><p class="hint" style="font-size:14px">Importa la scheda nuova del coach per iniziare il prossimo ciclo.</p><label class="btn" for="programFileHome">Importa la scheda nuova</label><input id="programFileHome" type="file" accept=".json,application/json" data-act="import-program-file" class="vh"></section>`;
@@ -55,7 +55,7 @@ function nowCard(d, c, letters) {
   const lastSame = L.sessionsOf(d, c.id).filter((s) => s.sheet === sug.sheet && s.finishedAt).pop();
   const min = lastSame && sessionMinutes(lastSame);
   return `<section class="card next stack"><div class="label">Prossima · settimana ${sug.week}</div>
-    <div class="row"><div><div class="big">${esc(sug.sheet)}</div><div class="hint" style="font-size:13px">${slots.length} esercizi${min ? ` · ~${min}′ l'ultima volta` : ""}</div></div>
+    <div class="row"><div><div class="big">${esc(sug.sheet)}</div><div class="hint" style="font-size:14px">${slots.length} esercizi${min ? ` · ~${min}′ l'ultima volta` : ""}</div></div>
     <button class="btn" data-act="start" data-sheet="${esc(sug.sheet)}" data-week="${sug.week}">Inizia ${esc(sug.sheet)}</button></div>
     <div class="grid4">${letters.map((l) => {
       const isDone = L.doneInWeek(d, c, l, sug.week);

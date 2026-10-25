@@ -12,7 +12,7 @@ Funziona offline. I dati restano sul telefono e vengono sincronizzati in un file
 | **Home** | Promemoria (peso, circonferenze, token, rata del coaching), sessione in corso o prossima scheda da iniziare, sessioni della settimana, aderenza al ciclo, peso, ultimi record e ultime sessioni. Usa sempre il ciclo in corso. |
 | **Scheda** | Ciclo scelto, con il menu ⋯ per creare un ciclo nuovo, chiuderlo o riaprirlo. **Programma**: esercizi per scheda e settimana, dettaglio con target, regolazioni e note del coach, modifica della scheda. **Sessioni**: sessioni del ciclo divise per settimana, da aprire e correggere, e inserimento di una sessione passata. |
 | **Misure** | Peso (sempre con due decimali, indicando la bilancia usata) e 8 circonferenze. Grafici per giorno, settimana, mese o anno, storico ed export PDF. |
-| **Logbook** | Il foglio del coach, una pagina per scheda, ed export PDF. |
+| **Logbook** | Il foglio del coach, una pagina per scheda (ogni 4 settimane per i cicli più lunghi), ed export PDF. |
 | **Report** | Confronto tra i cicli scelti: progressione dei carichi, volume per distretto, peso e circonferenze a inizio e fine. |
 | **⚙︎ Impostazioni** | Sincronizzazione, atleta e attrezzatura (bilancieri, dischi), catalogo esercizi, pagamento coaching, backup. |
 
@@ -37,7 +37,7 @@ La **sessione** si apre a schermo intero. In alto ci sono settimana, data e avan
 3. **Permissions → Repository permissions → Contents**: *Read and write*. Non serve altro.
 4. Scegli una scadenza (per esempio 1 anno), genera il token e copialo.
 
-Il token può leggere e scrivere solo quel repository. Resta salvato solo sul telefono e viaggia solo verso `api.github.com`.
+Il token può leggere e scrivere solo quel repository. Resta salvato solo sul telefono e viaggia solo verso `api.github.com`. Se il repository risulta pubblico, l'app rifiuta il collegamento.
 
 ## 4. Installa sull'iPhone
 
@@ -93,7 +93,8 @@ Dove compare:
   - **Anno**: 5 anni.
 
   Ogni pallino ha valore e data. I punti arancioni sono pesate fatte su un'altra bilancia.
-- **Annulla**: sessioni, pesate, misure, rate, programmi, bilancieri ed esercizi si eliminano con un tocco e si possono ripristinare per qualche secondo.
+- **Annulla**: sessioni, pesate, misure, rate, programmi, bilancieri ed esercizi si eliminano con un tocco e si possono ripristinare per qualche secondo. Anche sostituire o ripristinare un esercizio si può annullare.
+- **Scheda già fatta**: se tocchi una scheda già terminata in quella settimana, l'app chiede se rivederla o iniziarne una nuova.
 
 ## Export
 
@@ -112,7 +113,7 @@ Ogni 4-8 settimane:
 1. Manda il PDF della scheda a Claude e fatti preparare il file della scheda (`.json`, `type: "gymlog-program"`).
 2. Importalo da **Scheda → ⋯ → Nuovo ciclo dalla scheda del coach**, scegliendo la data di inizio.
 
-Il ciclo in corso si chiude da solo ma resta consultabile e modificabile.
+Il ciclo in corso continua fino alla data di inizio della scheda nuova e quel giorno si chiude da solo. Resta consultabile e modificabile.
 Gli esercizi nuovi entrano nel catalogo, quelli già presenti vengono riconosciuti per nome.
 
 ## Limiti di iOS
@@ -125,7 +126,8 @@ Gli esercizi nuovi entrano nel catalogo, quelli già presenti vengono riconosciu
 A ogni rilascio:
 1. Cambia `APP_VERSION` in `js/core.js` e `VERSION` in `sw.js`.
 2. Se aggiungi un file JavaScript, aggiungilo anche alla lista `SHELL` in `sw.js`, altrimenti offline non c'è.
-3. Usa Conventional Commits (`feat:`, `fix:`, …).
+3. Fai girare i test: `node --test tests/logic.test.mjs`.
+4. Usa Conventional Commits (`feat:`, `fix:`, …).
 
 ## Struttura del codice
 
@@ -152,6 +154,7 @@ js/views/logbook.js   Logbook
 js/views/settings.js  Impostazioni, catalogo, backup
 js/views/payments.js  Pagamento coaching
 js/reminders.js       scadenze dei promemoria: chip, pallini, conto dei giorni
+tests/logic.test.mjs  test della logica e del merge (node --test)
 ```
 
 ## Dati (`harden-data.json`)

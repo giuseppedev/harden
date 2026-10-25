@@ -46,14 +46,18 @@ export async function logbookPdf(d, cycle) {
   const nameW = 122, weekW = (A4[0] - 2 * M - nameW) / 4, cellW = weekW / 4, rowH = 10.5;
   const athlete = d.profile?.athlete || "";
 
-  for (const sheet of sheetLetters(cycle)) {
+  // The coach's sheet holds 4 weeks: longer cycles get one set of pages per 4 weeks (S1–S4, S5–S8).
+  const groups = [];
+  for (let w0 = 1; w0 <= cycle.weeks; w0 += 4) groups.push(Array.from({ length: Math.min(4, cycle.weeks - w0 + 1) }, (_, i) => w0 + i));
+  for (const sheet of sheetLetters(cycle)) for (const weeks of groups) {
     const rows = logbookRows(d, cycle, sheet);
+    const span = groups.length > 1 ? ` · settimane ${weeks[0]}-${weeks[weeks.length - 1]}` : "";
     let page, y, pageNo = 0;
     const newPage = () => {
       page = doc.addPage(A4);
       pageNo++;
       y = A4[1] - M;
-      page.drawText(safe(`Scheda ${sheet}${pageNo > 1 ? " (segue)" : ""}`), { x: M, y: y - 14, size: 16, font: bold, color: black });
+      page.drawText(safe(`Scheda ${sheet}${span}${pageNo > 1 ? " (segue)" : ""}`), { x: M, y: y - 14, size: 16, font: bold, color: black });
       const right = safe(`${athlete}${athlete ? " · " : ""}Ciclo ${cycle.number} · ${fmtRange(cycle.startDate, cycleEnd(cycle))}`);
       page.drawText(right, { x: A4[0] - M - font.widthOfTextAtSize(right, 9), y: y - 12, size: 9, font, color: black });
       y -= 30;
@@ -61,10 +65,10 @@ export async function logbookPdf(d, cycle) {
       const gen = safe(`generato il ${fmtDate(todayISO(), { weekday: false, year: true })}`);
       page.drawText(gen, { x: A4[0] - M - font.widthOfTextAtSize(gen, 7.5), y, size: 7.5, font, color: mid });
       y -= 8;
-      for (let w = 0; w < 4; w++) {
+      for (let w = 0; w < weeks.length; w++) {
         const x = M + nameW + w * weekW;
         page.drawRectangle({ x: x + 2, y: y - 14, width: weekW - 4, height: 12, borderColor: black, borderWidth: 0.8 });
-        const t = `Settimana ${w + 1}`;
+        const t = `Settimana ${weeks[w]}`;
         page.drawText(t, { x: x + weekW / 2 - bold.widthOfTextAtSize(t, 8) / 2, y: y - 10.5, size: 8, font: bold, color: black });
       }
       y -= 20;
@@ -90,9 +94,9 @@ export async function logbookPdf(d, cycle) {
         if (ty < top - blockH + 4) break;
         page.drawText(line, { x: M + 5, y: ty, size: 7, font: ital, color: mid }); ty -= 8.5;
       }
-      for (let w = 0; w < 4; w++) {
+      for (let w = 0; w < weeks.length; w++) {
         const x0 = M + nameW + w * weekW;
-        const sets = r.weeks[w + 1] || [];
+        const sets = r.weeks[weeks[w]] || [];
         for (let h = 0; h < halves; h++) {
           const yh = top - h * 3 * rowH;
           for (let k = 0; k < 4; k++) {

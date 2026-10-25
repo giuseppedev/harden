@@ -1,17 +1,17 @@
 // Report: comparison across the selected cycles, with collapsible sections.
 import * as store from "../data.js";
 import * as L from "../logic.js";
-import { esc, ui, changes, toast, render, byDate } from "../core.js";
+import { esc, D, ui, changes, toast, render, byDate } from "../core.js";
 
 const section = (title, body, open = true) => `<details class="card rep-sec" ${open ? "open" : ""}><summary><h2>${title}</h2></summary><div class="stack">${body}</div></details>`;
 
 export function viewReport(d) {
   const all = L.cyclesSorted(d);
-  ui.rep.cycles ??= new Set(all.map((c) => c.id));
-  const ids = all.filter((c) => ui.rep.cycles.has(c.id)).map((c) => c.id);
+  const on = (c) => !ui.rep.off.has(c.id); // cycles switched off by the user; new ones are included
+  const ids = all.filter(on).map((c) => c.id);
   const rep = L.reportData(d, ids), cyc = rep.cycles;
   const filters = `<section class="card stack"><div class="label">Cicli</div>
-    <div class="chips">${all.map((c) => `<label class="chip"><input type="checkbox" data-act="rep-cycle" value="${c.id}" ${ui.rep.cycles.has(c.id) ? "checked" : ""}>Ciclo ${c.number}</label>`).join("")}</div>
+    <div class="chips">${all.map((c) => `<label class="chip"><input type="checkbox" data-act="rep-cycle" value="${c.id}" ${on(c) ? "checked" : ""}>Ciclo ${c.number}</label>`).join("")}</div>
     <div class="tiles">
     <div class="tile"><b>${cyc.length}</b><span>${cyc.length === 1 ? "ciclo" : "cicli"}</span></div><div class="tile"><b>${rep.sessionsDone}</b><span>sessioni fatte</span></div>
     <div class="tile"><b>${rep.planned ? `${Math.round((Math.min(rep.sessionsDone, rep.planned) / rep.planned) * 100)}%` : "–"}</b><span>aderenza</span></div></div></section>`;
@@ -47,6 +47,10 @@ function bodyRange(d, cyc) {
 }
 
 Object.assign(changes, {
-  "rep-cycle": (t) => { t.checked ? ui.rep.cycles.add(t.value) : ui.rep.cycles.delete(t.value); if (!ui.rep.cycles.size) { ui.rep.cycles.add(t.value); toast("Serve almeno un ciclo"); } render(); },
+  "rep-cycle": (t) => {
+    t.checked ? ui.rep.off.delete(t.value) : ui.rep.off.add(t.value);
+    if (L.cyclesSorted(D()).every((c) => ui.rep.off.has(c.id))) { ui.rep.off.delete(t.value); toast("Serve almeno un ciclo"); }
+    render();
+  },
 });
 

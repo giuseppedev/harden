@@ -144,6 +144,16 @@ function flushTyping() {
 }
 
 /* ================= Boot ================= */
+/** Close cycles superseded by one that has started and freeze old substitution schemes (checked on a copy first). */
+function housekeeping() {
+  const d0 = store.get();
+  if (!d0) return;
+  const now = new Date().toISOString(), copy = JSON.parse(JSON.stringify(d0));
+  if (L.closeSupersededCycles(copy, now) | L.freezeSubstitutionSchemas(copy, now)) {
+    store.mutate((d) => { L.closeSupersededCycles(d, now); L.freezeSubstitutionSchemas(d, now); });
+  }
+}
+
 store.onChange((ev) => {
   if (ev.type === "storage-error") toast("Memoria del telefono piena o bloccata: i dati non sono stati salvati.", { error: true, ms: 6000 });
   if (ev.type === "replace") render();
@@ -155,6 +165,7 @@ window.addEventListener("pagehide", flushTyping);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") { flushTyping(); if (store.isDirty()) syncIfNeeded(); return; }
   drawTimer();
+  housekeeping();
   if (ui.view === "workout") wakeLock(true);
   syncIfNeeded();
 });
@@ -163,6 +174,7 @@ window.addEventListener("offline", renderHeader);
 
 store.load();
 navigator.storage?.persist?.().catch(() => {});
+housekeeping();
 const open = store.get() && L.openSession(store.get());
 const staleOpen = open && open.date < L.todayISO();
 if (open && !staleOpen) Object.assign(ui, { view: "workout", sessionId: open.id, back: "home" });

@@ -1,7 +1,7 @@
 // Session view: full screen, one card per exercise. Rarely used actions live in the ⋯ menus.
 import * as store from "../data.js";
 import * as L from "../logic.js";
-import { $, $$, esc, D, ui, actions, changes, inputs, toast, openModal, closeModal, openMenu, render, renderHeader, go, sessionById, cycleOfSession, runSync, deleteWithUndo } from "../core.js";
+import { $, $$, esc, D, ui, actions, changes, inputs, toast, undoToast, openModal, closeModal, openMenu, render, renderHeader, go, sessionById, cycleOfSession, runSync, deleteWithUndo } from "../core.js";
 import { startTimer, unlockAudio, stopTimer } from "../timer.js";
 import { chartBlock } from "../charts.js";
 
@@ -142,6 +142,7 @@ function ensureEntry(d, s, slot) {
   if (!e) {
     const r = L.resolveSlot(c, slot, s);
     e = s.entries[slot.id] = { exerciseId: r.exerciseId, substitution: r.substitution, sets: [] };
+    if (r.substitution) e.schema = r.blocks; // frozen: restoring the original later must not rewrite this session
     const v = lastVariantFor(d, r.exerciseId);
     if (v) e.variant = v;
   }
@@ -188,7 +189,7 @@ function onCheck(btn) {
   if (btn.dataset.mav && values.load != null) {
     const next = row.closest(".block").nextElementSibling;
     if (next?.classList.contains("block")) {
-      $$(".set:not(.done) [data-f=load]", next).forEach((inp) => { inp.value = L.fmtNum(values.load); });
+      $$(".set:not(.done) [data-f=load]", next).forEach((inp) => { inp.value = L.fmtNum(values.load); onSetInput(inp.closest(".set")); });
       toast(`Serie di lavoro precompilate con il carico MAV: ${L.fmtNum(values.load)} kg`);
       updateBarTotal(slotId);
     }
@@ -226,9 +227,23 @@ export const refreshBarTotals = () => $$("[data-total]").forEach((el) => updateB
 /* ---------- Start and finish ---------- */
 export function startSession(sheet, week, date, cycleId) {
   const d = D(), c = d.cycles.find((x) => x.id === cycleId);
-  const existing = L.sessionsOf(d, c.id).filter((s) => s.sheet === sheet && s.week === week).pop();
+  const same = L.sessionsOf(d, c.id).filter((s) => s.sheet === sheet && s.week === week);
   const back = ui.view === "workout" ? ui.back : ui.view;
-  if (existing) { go("workout", { sessionId: existing.id, back }); return; }
+  const open = same.filter((s) => !s.finishedAt).pop();
+  if (open) { go("workout", { sessionId: open.id, back }); return; }
+  const done = same.pop();
+  if (done && date) { go("workout", { sessionId: done.id, back }); return; } // past session already logged: open it
+  if (done) {
+    openModal(`<h2>Scheda ${esc(sheet)} · settimana ${week} già fatta</h2>
+      <p class="hint" style="font-size:14px">L'hai terminata ${esc(L.fmtDate(done.date))}. Vuoi rivederla o iniziarne una nuova?</p>
+      <button class="btn" data-act="start-new" data-sheet="${esc(sheet)}" data-week="${week}" data-cycle="${c.id}">Inizia una nuova sessione</button>
+      <button class="btn ghost" data-act="open-session" data-id="${done.id}">Apri quella del ${esc(L.fmtDate(done.date, { weekday: false }))}</button>
+      <button class="btn ghost" data-act="close">Annulla</button>`);
+    return;
+  }
+  createSession(c, sheet, week, date, back);
+}
+function createSession(c, sheet, week, date, back) {
   const id = store.uid();
   store.mutate((dd) => store.upsert(dd, "sessions", { id, cycleId: c.id, sheet, week, date: date || L.todayISO(), createdAt: store.now(), finishedAt: null, entries: {} }));
   go("workout", { sessionId: id, back });
@@ -299,7 +314,7 @@ function openSummary(s) {
       <div class="tile"><b>${L.fmtNum(Math.round(r.volume))}</b><span>kg sollevati</span></div>
       <div class="tile"><b>${r.prs.length}</b><span>record</span></div>
     </div>
-    ${volDelta != null ? `<p class="hint" style="font-size:13px">Volume ${volDelta >= 0 ? "+" : ""}${volDelta}% rispetto alla scheda ${esc(s.sheet)} precedente.</p>` : ""}
+    ${volDelta != null ? `<p class="hint" style="font-size:14px">Volume ${volDelta >= 0 ? "+" : ""}${volDelta}% rispetto alla scheda ${esc(s.sheet)} precedente.</p>` : ""}
     ${r.prs.length ? `<div class="banner">🏆 ${r.prs.map((p) => `${esc(p.name)}: ${L.fmtNum(p.load)} kg (prima ${L.fmtNum(p.prev)})`).join(" · ")}</div>` : ""}
     <div class="label">Serie migliore per esercizio</div>
     <ul class="list">${r.lines.map((l) => `<li><span>${esc(l.name)}</span><span class="val"><b>${esc(L.fmtSet(l.now))}</b>${trend(l.now, l.prev)}</span></li>`).join("")}</ul>
@@ -385,7 +400,7 @@ function renderSubList() {
   const li = (e) => `<li><button data-act="sub-pick" data-id="${e.id}" class="${subState.pick === e.id ? "sel" : ""}"><span class="dist">${esc(e.district)}</span>${esc(e.name)}</button></li>`;
   $("#subList").innerHTML = (same.length ? `<li class="cat-h">Stesso distretto · ${esc(dist)}</li>${same.map(li).join("")}` : "")
     + (other.length ? `<li class="cat-h">Altri distretti</li>${other.map(li).join("")}` : "")
-    || `<li style="padding:10px;font-size:13px;color:var(--muted)">Nessun risultato. Crealo qui sotto.</li>`;
+    || `<li style="padding:10px;font-size:14px;color:var(--muted)">Nessun risultato. Crealo qui sotto.</li>`;
   $("#subOk").disabled = !subState.pick;
 }
 
@@ -404,6 +419,7 @@ function confirmSubstitution() {
     schema = [{ sets, reps }];
   }
   const exerciseId = subState.pick, mode = subState.mode;
+  const undo = snapshotSlot(s, slot.id);
   store.mutate((d) => {
     const cc = d.cycles.find((x) => x.id === c.id);
     if (mode === "permanent") {
@@ -417,11 +433,34 @@ function confirmSubstitution() {
   });
   closeModal();
   render();
-  toast(mode === "permanent" ? "Sostituito fino a fine ciclo" : "Sostituito solo per oggi");
+  undoToast(`${mode === "permanent" ? "Sostituito fino a fine ciclo" : "Sostituito solo per oggi"}${undo.hadSets ? " · serie di oggi azzerate" : ""}`, undo.restore);
+}
+
+/** Snapshot of a slot (today's entry and the cycle override) so a substitution or a restore can be undone. */
+function snapshotSlot(s, slotId) {
+  const c = cycleOfSession(s);
+  const entry = s.entries?.[slotId] ? JSON.parse(JSON.stringify(s.entries[slotId])) : null;
+  const override = c.overrides?.[slotId] ? JSON.parse(JSON.stringify(c.overrides[slotId])) : null;
+  return {
+    hadSets: !!entry && L.doneSets(entry).length > 0,
+    restore: () => {
+      store.mutate((dd) => {
+        const cc = dd.cycles.find((x) => x.id === c.id), sess = dd.sessions.find((x) => x.id === s.id);
+        const o = { ...(cc.overrides || {}) };
+        if (override) o[slotId] = override; else delete o[slotId];
+        cc.overrides = o; cc.updatedAt = store.now();
+        sess.entries ??= {};
+        if (entry) sess.entries[slotId] = entry; else delete sess.entries[slotId];
+        sess.updatedAt = store.now();
+      });
+      render(); toast("Ripristinato");
+    },
+  };
 }
 
 function restoreOriginal(slotId) {
   const s = current(), c = cycleOfSession(s), slot = slotOf(s, slotId);
+  const undo = snapshotSlot(s, slotId);
   store.mutate((d) => {
     const cc = d.cycles.find((x) => x.id === c.id);
     const ov = cc.overrides?.[slotId];
@@ -434,7 +473,7 @@ function restoreOriginal(slotId) {
     sess.updatedAt = store.now();
   });
   closeModal(); render();
-  toast("Ripristinato l'esercizio originale");
+  undoToast(`Ripristinato l'esercizio originale${undo.hadSets ? " · serie di oggi azzerate" : ""}`, undo.restore);
 }
 
 /* ---------- History, coach notes, setup ---------- */
@@ -457,7 +496,7 @@ export function coachNotes(slot) {
     slot.progressionNote && `<p><b>Progressione:</b> ${esc(slot.progressionNote)}</p>`,
     slot.tut && `<p><b>TUT:</b> ${esc(slot.tut)}</p>`,
     slot.week4Plus && `<p><b>Settimana 4:</b> aumenta il carico (+).</p>`,
-    slot.video && `<p><a href="${esc(slot.video)}" target="_blank" rel="noopener">Apri il video</a></p>`,
+    /^https?:\/\//i.test(slot.video || "") && `<p><a href="${esc(slot.video)}" target="_blank" rel="noopener">Apri il video</a></p>`,
   ].filter(Boolean).join("");
 }
 
@@ -473,6 +512,7 @@ function openSetup(exId) {
 /* ---------- Handlers ---------- */
 Object.assign(actions, {
   "workout-back": () => go(ui.back || "home"),
+  "start-new": (el) => { closeModal(); createSession(D().cycles.find((x) => x.id === el.dataset.cycle), el.dataset.sheet, +el.dataset.week, null, ui.view); },
   check: (el) => onCheck(el),
   finish: () => finishSession(),
   "session-menu": () => {
@@ -491,7 +531,11 @@ Object.assign(actions, {
       <div class="row"><button class="btn ghost" data-act="close">Annulla</button><button class="btn" data-act="meta-ok">Salva</button></div>`);
   },
   "meta-ok": () => {
-    const w = +$("#metaWeek").value, dt = $("#metaDate").value;
+    const w = +$("#metaWeek").value, dt = $("#metaDate").value, s = current(), c = cycleOfSession(s);
+    if (!dt) { toast("Inserisci la data"); return; }
+    const clash = L.sessionsOf(D(), c.id).find((x) => x.id !== s.id && x.sheet === s.sheet && x.week === w);
+    if (clash) { toast(`C'è già la scheda ${s.sheet} della settimana ${w} (${L.fmtDate(clash.date, { weekday: false })})`, { error: true }); return; }
+    if (dt < c.startDate || dt > L.cycleEnd(c)) { toast(`La data deve essere nel ciclo ${c.number}: ${L.fmtRange(c.startDate, L.cycleEnd(c))}`, { error: true }); return; }
     store.mutate((d) => { const s = d.sessions.find((x) => x.id === ui.sessionId); s.week = w; s.date = dt || s.date; s.updatedAt = store.now(); });
     closeModal(); render();
   },
