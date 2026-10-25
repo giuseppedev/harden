@@ -285,7 +285,7 @@ body.full { padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
 .rchips { display: flex; flex-wrap: wrap; gap: 8px; }
 .rchip { flex: none; display: flex; align-items: center; gap: 6px; border: 1px solid var(--rest); background: var(--rest-soft); color: var(--rest); border-radius: 999px; padding: 8px 12px; font-size: 13px; font-weight: 700; }
 .rchip small { font-weight: 500; opacity: .85; font-size: 12px; }
-.rchip.warn { border-color: var(--danger); background: transparent; color: var(--danger); }
+.rchip.over { border-color: var(--danger); background: transparent; color: var(--danger); }
 .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; text-align: left; font: inherit; color: inherit; }
 .kpi.wide { grid-column: 1 / -1; }
@@ -339,3 +339,7 @@ textarea { resize: vertical; }
 .cycle-bar { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
 label.menu-item { display: block; cursor: pointer; }
 .trend .vlabel.last { fill: var(--accent); }
+.tabs button.dot.over::after, .icon-btn.dot.over::after { background: var(--danger); }
+.due { font-weight: 700; text-transform: none; letter-spacing: 0; }
+.due.soon { color: var(--rest); }
+.due.over { color: var(--danger); }

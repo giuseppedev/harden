@@ -12,8 +12,8 @@ Funziona offline. I dati restano sul telefono e vengono sincronizzati in un file
 | **Home** | Promemoria (peso, circonferenze, token, rata del coaching), sessione in corso o prossima scheda da iniziare, sessioni della settimana, aderenza al ciclo, peso, ultimi record e ultime sessioni. Usa sempre il ciclo in corso. |
 | **Scheda** | Ciclo scelto, con il menu ⋯ per creare un ciclo nuovo, chiuderlo o riaprirlo. **Programma**: esercizi per scheda e settimana, dettaglio con target, regolazioni e note del coach, modifica della scheda. **Sessioni**: sessioni del ciclo divise per settimana, da aprire e correggere, e inserimento di una sessione passata. |
 | **Misure** | Peso (sempre con due decimali, indicando la bilancia usata) e 8 circonferenze. Grafici per giorno, settimana, mese o anno, storico ed export PDF. |
-| **Report** | Confronto tra i cicli scelti: progressione dei carichi, volume per distretto, peso e circonferenze a inizio e fine. |
 | **Logbook** | Il foglio del coach, una pagina per scheda, ed export PDF. |
+| **Report** | Confronto tra i cicli scelti: progressione dei carichi, volume per distretto, peso e circonferenze a inizio e fine. |
 | **⚙︎ Impostazioni** | Sincronizzazione, atleta e attrezzatura (bilancieri, dischi), catalogo esercizi, pagamento coaching, backup. |
 
 La **sessione** si apre a schermo intero. In alto ci sono settimana, data e avanzamento, poi una card per esercizio con serie, storico delle ultime due volte, regolazioni, serie extra e nota. Le azioni meno frequenti (sostituisci, storico e progressione, recupero, note del coach) stanno nel menu ⋯ della card. Cambiare data o settimana ed eliminare la sessione si fa dal menu ⋯ in alto.
@@ -63,10 +63,20 @@ Il token può leggere e scrivere solo quel repository. Resta salvato solo sul te
 
 ## Promemoria
 
-- **Peso**: chip in Home se non lo registri da 3 giorni.
-- **Circonferenze**: chip ogni 7 giorni dall'ultima misurazione.
-- **Token**: chip 14 giorni prima della scadenza inserita nelle impostazioni, rosso quando è scaduto.
-- **Rata del coaching**: dopo 30 giorni dall'ultimo pagamento la rata successiva risulta in ritardo. Compaiono un chip in Home ("Rata 2 coaching · in ritardo di 2 gg"), un banner rosso in Impostazioni e un pallino sull'icona ⚙︎.
+Ogni promemoria ha una scadenza.
+- Qualche giorno prima compare in arancione con il conto alla rovescia ("scade tra 2 gg", "scade domani", "scade oggi").
+- Dopo la scadenza compare in rosso con i giorni passati ("scaduto da 3 gg").
+
+| Promemoria | Scadenza | Arancione da |
+|---|---|---|
+| Peso | 3 giorni dopo l'ultima pesata | 1 giorno prima |
+| Circonferenze | 7 giorni dopo l'ultima misurazione | 3 giorni prima |
+| Rata del coaching | 30 giorni dopo l'ultima rata | 3 giorni prima |
+| Token GitHub | data di scadenza inserita | 15 giorni prima |
+
+Dove compare:
+- **In Home**: come chip.
+- **Nelle sezioni**: un pallino sul tab Misure (peso, circonferenze) e sull'icona ⚙︎ (token, rata). Nella sezione il conto colorato si aggiunge alla riga che mostra già la data. Il token scaduto ha anche un banner rosso, perché la sincronizzazione si ferma.
 - **Sessione rimasta aperta** dal giorno prima: all'apertura l'app chiede se terminarla o riprenderla.
 
 ## Cose utili da sapere
@@ -93,7 +103,7 @@ Il token può leggere e scrivere solo quel repository. Resta salvato solo sul te
 | Misure e peso | Misure → Esporta PDF | `Misure e peso - 2026-10-25.pdf` |
 | Backup completo | Impostazioni → Backup → Esporta dati | `harden-data-2026-10-25.json` |
 
-Il PDF delle misure contiene le ultime circonferenze con la loro data e il peso degli ultimi 7 giorni. Le pesate fatte su un'altra bilancia sono segnate con l'asterisco.
+Entrambi i PDF riportano la data in cui sono stati generati. Il PDF delle misure contiene le ultime circonferenze con la loro data e il peso degli ultimi 7 giorni. Le pesate fatte su un'altra bilancia sono segnate con l'asterisco.
 L'import di un backup unisce il file ai dati del telefono.
 
 ## Nuova scheda del coach
@@ -141,6 +151,7 @@ js/views/report.js    Report
 js/views/logbook.js   Logbook
 js/views/settings.js  Impostazioni, catalogo, backup
 js/views/payments.js  Pagamento coaching
+js/reminders.js       scadenze dei promemoria: chip, pallini, conto dei giorni
 ```
 
 ## Dati (`harden-data.json`)

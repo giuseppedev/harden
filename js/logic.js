@@ -357,3 +357,21 @@ export function bucketSeries(points, g, offset = 0) {
   return { buckets, title: win.title, hasOlder: win.from > oldest, hasNewer: offset > 0 };
 }
 export function daysSince(date) { return date ? daysBetween(date, todayISO()) : Infinity; }
+
+/* ---------- Deadlines (reminders) ---------- */
+/** Days left until `due` (negative once overdue) and state: "ok", "soon" within `window` days, "over" after; no date counts as overdue. */
+export function deadline(due, window) {
+  if (!due) return { left: null, state: "over" };
+  const left = daysBetween(todayISO(), due);
+  return { left, state: left < 0 ? "over" : left <= window ? "soon" : "ok" };
+}
+/** "scade tra 3 gg", "scade domani", "scade oggi", "scaduto da 2 gg"; `ending` agrees the words with the subject (o, a, e = plural). */
+export function dueText({ left }, ending = "o", long = false) {
+  const days = (n) => (long ? `${n} ${n === 1 ? "giorno" : "giorni"}` : `${n} gg`);
+  if (left == null) return `mai registrat${ending}`;
+  const verb = ending === "e" ? "scadono" : "scade";
+  if (left > 1) return `${verb} tra ${days(left)}`;
+  if (left === 1) return `${verb} domani`;
+  if (left === 0) return `${verb} oggi`;
+  return `scadut${ending} da ${days(-left)}`;
+}

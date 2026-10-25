@@ -5,7 +5,7 @@ import * as store from "../data.js";
 import * as L from "../logic.js";
 import { $, esc, D, actions, confirmed, toast, openModal, closeModal, render, runSync, deleteWithUndo, byDate } from "../core.js";
 
-const LATE_AFTER_DAYS = 30;
+const LATE_AFTER_DAYS = 30, SOON_DAYS = 3;
 const eur = (n) => `${Number(n || 0).toLocaleString("it-IT", { maximumFractionDigits: 2, useGrouping: "always" })} €`;
 const dateY = (s) => L.fmtDate(s, { weekday: false, year: true });
 const period = (p) => `${dateY(p.startDate)} – ${dateY(p.endDate)}`;
@@ -19,10 +19,10 @@ function statusOf(d, plan) {
   const paid = pays.reduce((a, p) => a + (p.amount || 0), 0);
   const ref = pays.length ? pays[pays.length - 1].date : plan.startDate;
   const left = Math.max(0, plan.count - pays.length);
-  const late = left ? Math.max(0, L.daysSince(ref) - LATE_AFTER_DAYS) : 0;
-  return { plan, pays, paid, left, late, next: pays.length + 1, dueBy: L.addDays(ref, LATE_AFTER_DAYS) };
+  const dueBy = L.addDays(ref, LATE_AFTER_DAYS);
+  return { plan, pays, paid, left, next: pays.length + 1, dueBy, due: left ? L.deadline(dueBy, SOON_DAYS) : { state: "ok" } };
 }
-/** Status of the current (newest) program, or null; `late` is how many days the next instalment is overdue. */
+/** Status of the current (newest) program, or null; `dueBy` is the last day to pay the next instalment. */
 export function planStatus(d) {
   const plan = plansOf(d)[0];
   return plan ? statusOf(d, plan) : null;
@@ -38,9 +38,8 @@ export function paymentsCard(d) {
     <p class="hint">Inserisci il programma (periodo, costo, rate) e registra ogni rata versata. Dopo 30 giorni dall'ultimo pagamento la rata successiva risulta in ritardo.</p></section>`;
   const st = statusOf(d, plans[0]), past = plans.slice(1);
   return `<section class="card stack">${head(`<button class="mini" data-act="plan-edit" data-id="${st.plan.id}">Modifica</button>`)}
-    ${st.late ? `<div class="banner danger">Rata ${st.next} di ${st.plan.count} in ritardo di ${st.late} ${st.late === 1 ? "giorno" : "giorni"}</div>` : ""}
     <div><b>Programma ${st.plan.number}</b> <span class="hint">· ${esc(period(st.plan))}</span>
-      <p class="hint">${summary(st)}${st.left && !st.late ? ` · rata ${st.next} entro il ${esc(L.fmtDate(st.dueBy, { weekday: false }))}` : ""}</p></div>
+      <p class="hint">${summary(st)}${st.left ? ` · rata ${st.next} entro il ${esc(L.fmtDate(st.dueBy, { weekday: false }))}${st.due.state !== "ok" ? ` · <span class="due ${st.due.state}">${esc(L.dueText(st.due, "a"))}</span>` : ""}` : ""}</p></div>
     ${st.left ? `<button class="btn" data-act="pay-new" data-plan="${st.plan.id}">Registra rata ${st.next}</button>` : ""}
     ${st.pays.length ? paymentList(st) : ""}
     ${past.length ? `<div class="groups"><details><summary class="plain"><span>Programmi precedenti</span><span class="hint">${past.length}</span></summary>

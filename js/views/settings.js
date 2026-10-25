@@ -6,13 +6,16 @@ import { $, esc, D, ui, actions, confirmed, changes, inputs, toast, openModal, c
 import { platesOf, matchScore } from "./session.js";
 import { readJsonFile } from "./program.js";
 import { paymentsCard } from "./payments.js";
+import { remindersFor, dueTag } from "../reminders.js";
 
 export function viewSettings(d) {
+  const tok = d ? remindersFor(d, "settings").find((r) => r.key === "token") : null;
   const cfg = gh.getConfig(), meta = gh.getMeta(), on = gh.isConfigured();
   const bars = d ? store.live(d.bars) : [];
   const exCount = d ? store.live(d.exercises).length : 0;
-  const syncCard = on ? `<section class="card stack"><div class="row"><h2>Sincronizzazione</h2><span class="sync ${ui.syncState === "error" ? "err" : store.isDirty() ? "pending" : "ok"}">${ui.syncState === "error" ? "errore" : store.isDirty() ? "da inviare" : "collegato"}</span></div>
-      <p class="hint">${esc(cfg.owner)}/${esc(cfg.repo)} · ${meta.lastSync ? `ultimo sync ${esc(new Date(meta.lastSync).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}` : "mai sincronizzato"}${cfg.expiry ? ` · token scade ${esc(L.fmtDate(cfg.expiry, { weekday: false, year: true }))}` : ""}</p>
+  const syncCard = on ? `<section class="card stack"><div class="row"><h2>Sincronizzazione</h2>${(() => { const expired = cfg.expiry && cfg.expiry < L.todayISO(); const [cls, txt] = expired ? ["err", "token scaduto"] : ui.syncState === "error" ? ["err", "errore"] : store.isDirty() ? ["pending", "da inviare"] : ["ok", "collegato"]; return `<span class="sync ${cls}">${txt}</span>`; })()}</div>
+      ${tok?.state === "over" ? `<div class="banner danger">🔑 Token scaduto: la sincronizzazione è ferma. Rigeneralo su GitHub e incollalo in Modifica.</div>` : ""}
+      <p class="hint">${esc(cfg.owner)}/${esc(cfg.repo)} · ${meta.lastSync ? `ultimo sync ${esc(new Date(meta.lastSync).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }))}` : "mai sincronizzato"}${cfg.expiry ? ` · token valido fino al ${esc(L.fmtDate(cfg.expiry, { weekday: false, year: true }))}${dueTag(tok)}` : ""}</p>
       ${ui.syncState === "error" ? `<p class="hint" style="color:var(--danger)">${esc(ui.syncError)}</p>` : ""}
       <div class="row"><button class="btn ghost small" style="flex:1" data-act="sync">Sincronizza ora</button><button class="btn ghost small" style="flex:1" data-act="gh-edit">Modifica</button></div></section>`
     : `<section class="card stack"><h2>Sincronizzazione GitHub</h2>${ghForm(cfg)}</section>`;

@@ -1,32 +1,11 @@
 // Home: what to do now (reminders, next session) and a few numbers at a glance. Everything else lives in its tab.
 import * as store from "../data.js";
-import * as gh from "../github.js";
 import * as L from "../logic.js";
-import { esc, D, ui, actions, go, byDate, lastDate } from "../core.js";
+import { esc, D, ui, actions, go, byDate } from "../core.js";
 import { sparkline } from "../charts.js";
 import { sessionRow, sessionMinutes, startSession, openSessionView } from "./session.js";
 import { openWeightForm, openMeasureForm } from "./measures.js";
-import { planStatus } from "./payments.js";
-
-/** Weight after 3 days, circumferences every 7 days, token expiry within 14 days. */
-export function reminders(d) {
-  const out = [];
-  const lastW = lastDate(d.weights), lastM = lastDate(d.measurements);
-  const dw = L.daysSince(lastW), dm = L.daysSince(lastM);
-  const ago = (n, last) => (last ? `${n} gg fa` : "mai");
-  if (dw >= 3) out.push({ icon: "⚖︎", text: "Peso", small: ago(dw, lastW), act: "go-weight" });
-  if (dm >= 7) out.push({ icon: "📏", text: "Circonferenze", small: ago(dm, lastM), act: "go-circ" });
-  const pay = planStatus(d);
-  if (pay?.late) out.push({ icon: "💶", text: `Rata ${pay.next} coaching`, small: `in ritardo di ${pay.late} gg`, act: "go-settings", warn: true });
-  const exp = gh.getConfig().expiry;
-  if (exp && gh.isConfigured()) {
-    const left = -L.daysSince(exp);
-    if (left < 0) out.push({ icon: "🔑", text: "Token scaduto", small: "sync ferma", act: "go-settings", warn: true });
-    else if (left <= 14) out.push({ icon: "🔑", text: "Token", small: `scade tra ${left} gg`, act: "go-settings", warn: true });
-  }
-  return out;
-}
-export const measureDue = (d) => L.daysSince(lastDate(d.weights)) >= 3 || L.daysSince(lastDate(d.measurements)) >= 7;
+import { reminders } from "../reminders.js";
 
 /** Personal bests in chronological order (a set heavier than every earlier one on that exercise), newest first. */
 function recentRecords(d, n = 3) {
@@ -45,7 +24,7 @@ function recentRecords(d, n = 3) {
 
 export function viewDashboard(d) {
   const c = L.currentCycle(d);
-  const chips = reminders(d).map((r) => `<button class="rchip ${r.warn ? "warn" : ""}" data-act="${r.act}">${r.icon} ${esc(r.text)} <small>${esc(r.small)}</small></button>`).join("");
+  const chips = reminders(d).map((r) => `<button class="rchip ${r.state}" data-act="${r.act}">${r.icon} ${esc(r.name)} <small>${esc(L.dueText(r, r.ending))}</small></button>`).join("");
   if (!c) return `${chips ? `<div class="rchips">${chips}</div>` : ""}<p class="empty">Nessun ciclo. Importa la scheda del coach dal tab Scheda.</p>`;
   const letters = L.sheetLetters(c);
   const done = L.sessionsOf(d, c.id).filter((s) => s.finishedAt || L.sessionHasWork(s));

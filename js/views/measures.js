@@ -3,6 +3,7 @@ import * as store from "../data.js";
 import * as L from "../logic.js";
 import { $, $$, esc, D, ui, actions, confirmed, toast, openModal, closeModal, render, runSync, deleteWithUndo, byDate, exportCard, runExport } from "../core.js";
 import { chartBlock, groupBy, MONTH_NAMES } from "../charts.js";
+import { remindersFor, dueTag } from "../reminders.js";
 
 function bodySvg() {
   return `<svg viewBox="0 0 200 350" role="img" aria-label="Punti di misurazione">
@@ -22,10 +23,11 @@ export function viewMeasures(d) {
   const tabs = `<div class="subtabs" role="tablist">
     <button role="tab" data-act="mtab" data-tab="weight" aria-selected="${ui.mTab === "weight"}">Peso</button>
     <button role="tab" data-act="mtab" data-tab="circ" aria-selected="${ui.mTab === "circ"}">Circonferenze</button></div>`;
-  return exportCard("Misure e peso", "Ultime circonferenze e peso a 7 giorni", "export-measures") + tabs + (ui.mTab === "weight" ? weightTab(ws) : circTab(ms));
+  const rem = remindersFor(d, "measures").find((r) => r.key === ui.mTab);
+  return exportCard("Misure e peso", "Ultime circonferenze e peso a 7 giorni", "export-measures") + tabs + (ui.mTab === "weight" ? weightTab(ws, rem) : circTab(ms, rem));
 }
 
-function weightTab(ws) {
+function weightTab(ws, rem) {
   const last = ws[ws.length - 1];
   if (!last) return `<section class="card stack"><h2>Peso</h2><p class="hint" style="font-size:14px">Registra il peso quando vuoi, anche ogni giorno.</p><button class="btn" data-act="weight-new">+ Registra peso</button></section>`;
   const week = ws.find((w) => w.date >= L.addDays(last.date, -7));
@@ -33,9 +35,9 @@ function weightTab(ws) {
   const flag = (a, b) => (a?.scale === "other" || b?.scale === "other" ? "*" : "");
   return `
   <section class="card stack">
-    <div class="row"><div class="label">Ultimo peso · ${esc(L.fmtDate(last.date))}</div>${last.scale === "other" ? '<span class="scale-tag">altra bilancia</span>' : ""}</div>
+    <div class="row"><div class="label">Ultimo peso · ${esc(L.fmtDate(last.date))}${dueTag(rem)}</div>${last.scale === "other" ? '<span class="scale-tag">altra bilancia</span>' : ""}</div>
     <div class="big-value ${last.scale === "other" ? "alt" : ""}">${L.fmtKg(last.kg)}<small> kg</small></div>
-    <div class="deltas">${week && week !== last ? `<span>7 giorni <b>${L.fmtDelta(last.kg, week.kg, 2)}${flag(last, week)}</b></span>` : ""}${ws.length > 1 ? `<span>Dal primo <b>${L.fmtDelta(last.kg, first.kg, 2)}${flag(last, first)}</b></span>` : ""}<span>${ws.length} pesate</span></div>
+    <div class="deltas">${week && week !== last ? `<span>7 giorni <b>${L.fmtDelta(last.kg, week.kg, 2)}${flag(last, week)}</b></span>` : ""}${ws.length > 1 ? `<span>Dal primo <b>${L.fmtDelta(last.kg, first.kg, 2)}${flag(last, first)}</b></span>` : ""}<span>${ws.length} ${ws.length === 1 ? "pesata" : "pesate"}</span></div>
     <button class="btn" data-act="weight-new">+ Registra peso</button>
   </section>
   <section class="card stack"><h2>Andamento</h2>${chartBlock("weight", ws.map((w) => ({ date: w.date, v: w.kg, alt: w.scale === "other" })), "kg", "D", { decimals: 2 })}</section>
@@ -49,7 +51,7 @@ function weightTab(ws) {
   </section>`;
 }
 
-function circTab(ms) {
+function circTab(ms, rem) {
   const last = ms[ms.length - 1], prev = ms[ms.length - 2];
   if (!last) return `<section class="card stack"><h2>Circonferenze</h2><p class="hint" style="font-size:14px">Prendi le misure una volta a settimana, sempre nelle stesse condizioni.</p><button class="btn" data-act="measure-new">+ Nuova misurazione</button></section>`;
   ui.circMeasure ??= "waist";
@@ -57,7 +59,7 @@ function circTab(ms) {
   const pts = ms.filter((e) => e.values[k] != null).map((e) => ({ date: e.date, v: e.values[k] }));
   return `
   <section class="card stack">
-    <div class="row"><div class="label">Ultima misurazione · ${esc(L.fmtDate(last.date))}</div><span class="hint">${prev ? `vs ${esc(L.fmtDate(prev.date, { weekday: false }))}` : ""}</span></div>
+    <div class="row"><div class="label">Ultima misurazione · ${esc(L.fmtDate(last.date))}${dueTag(rem)}</div><span class="hint">${prev ? `vs ${esc(L.fmtDate(prev.date, { weekday: false }))}` : ""}</span></div>
     <div class="mtiles">${L.MEASURES.map((x) => {
       // Latest known value for each measure, even if the last session skipped it.
       const withVal = ms.filter((e) => e.values[x.k] != null), lv = withVal[withVal.length - 1], pv = withVal[withVal.length - 2];

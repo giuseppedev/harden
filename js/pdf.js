@@ -58,6 +58,8 @@ export async function logbookPdf(d, cycle) {
       page.drawText(right, { x: A4[0] - M - font.widthOfTextAtSize(right, 9), y: y - 12, size: 9, font, color: black });
       y -= 30;
       page.drawText(safe("In ogni serie: sopra le ripetizioni, sotto i kg (solo dischi). Le serie MAV non sono riportate."), { x: M, y, size: 7.5, font: ital, color: mid });
+      const gen = safe(`generato il ${fmtDate(todayISO(), { weekday: false, year: true })}`);
+      page.drawText(gen, { x: A4[0] - M - font.widthOfTextAtSize(gen, 7.5), y, size: 7.5, font, color: mid });
       y -= 8;
       for (let w = 0; w < 4; w++) {
         const x = M + nameW + w * weekW;
