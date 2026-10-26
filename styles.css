@@ -362,3 +362,7 @@ label.menu-item { display: block; cursor: pointer; }
 .btn.small { min-height: 44px; }
 .menu-item { min-height: 52px; }
 
+details.coach { margin-top: 10px; border-top: 0; padding-top: 0; }
+details.coach summary { min-height: 44px; display: flex; align-items: center; font-size: 14px; }
+details.coach .notes { padding-bottom: 4px; }
+#appHeader h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

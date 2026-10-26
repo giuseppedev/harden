@@ -6,6 +6,11 @@ import { startTimer, unlockAudio, stopTimer } from "../timer.js";
 import { chartBlock } from "../charts.js";
 
 const noteOpen = new Set();
+const coachOpen = new Set(); // coach notes left open survive re-renders
+document.addEventListener("toggle", (e) => {
+  const id = e.target?.dataset?.coach;
+  if (id) e.target.open ? coachOpen.add(id) : coachOpen.delete(id);
+}, true);
 
 /* ---------- Lookups ---------- */
 const prevEntryFor = (d, session, exerciseId) => L.historyFor(d, exerciseId, { before: session })[0] || null;
@@ -78,8 +83,7 @@ function exerciseCard(d, c, s, slot) {
   const chips = hist.length
     ? hist.map((h) => { const v = ex.variants?.length ? L.variantOf(d, h.entry) : ""; return `<span><b>${h.cycle.id === c.id ? "" : `C${h.cycle.number} `}S${h.session.week}${v ? ` · ${esc(v)}` : ""}:</b> ${L.countedSets(h).map(L.fmtSet).join(", ")}</span>`; }).join("")
     : `<span>Mai fatto prima</span>`;
-  const best = L.bestLoadBefore(d, r.exerciseId, s);
-  const isPR = (st, role) => !!st?.done && role !== "warm" && best != null && st.load != null && st.load > best;
+  const prK = prIndex(d, s, slot);
   let k = 0;
   const blocks = r.blocks.map((b, bi) => {
     const items = targets.filter((t) => t.block === bi);
@@ -89,17 +93,17 @@ function exerciseCard(d, c, s, slot) {
       const i = k++;
       const saved = entry?.sets?.[i];
       const pv = prevRaw[i] || (t.role === "warm" ? null : prevLast);
-      const reps = saved?.reps ?? (L.isNumericReps(t.reps) ? t.reps : pv?.reps ?? "");
+      const reps = saved?.reps ?? pv?.reps ?? (L.isNumericReps(t.reps) ? t.reps : "");
       const load = saved?.load ?? pv?.load ?? "";
       const role = t.role === "warm" ? "avv " : t.role === "mav" ? "MAV " : "";
-      return setRow(slot.id, i, `${role}${t.reps}`, t.role, saved, reps, load, isPR(saved, t.role));
+      return setRow(slot.id, i, `${role}${t.reps}`, t.role, saved, reps, load, i === prK);
     }).join("")}</div>`;
   }).join("");
   const extra = entry?.extra || 0;
   const extraRows = Array.from({ length: extra }, (_, j) => {
     const i = targets.length + j, saved = entry?.sets?.[i];
     const pv = entry?.sets?.[i - 1] || prevLast;
-    return setRow(slot.id, i, "extra", "extra", saved, saved?.reps ?? pv?.reps ?? "", saved?.load ?? pv?.load ?? "", isPR(saved, "extra"));
+    return setRow(slot.id, i, "extra", "extra", saved, saved?.reps ?? pv?.reps ?? "", saved?.load ?? pv?.load ?? "", i === prK);
   }).join("");
   const barId = entry?.barId ?? lastBarFor(d, r.exerciseId);
   const barHtml = ex.usesBar ? `<div class="bar-row"><select data-act="bar" data-slot="${slot.id}" aria-label="Bilanciere"><option value="">Nessun bilanciere</option>${store.live(d.bars).map((b) => `<option value="${b.id}" ${b.id === barId ? "selected" : ""}>${esc(b.name)}${b.kg != null ? ` · ${L.fmtNum(b.kg)} kg` : ""}</option>`).join("")}</select>
@@ -108,6 +112,7 @@ function exerciseCard(d, c, s, slot) {
   const variantHtml = ex.variants?.length ? `<label class="variant-row"><span class="label">Variante</span><select data-act="variant" data-slot="${slot.id}">${ex.variants.map((v) => `<option ${v === variant ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>` : "";
   const showNote = !!entry?.note || noteOpen.has(slot.id);
   const prevNote = !entry?.note && prev?.entry.note ? prev.entry.note : "";
+  const coach = !r.substitution && coachNotes(slot);
   const sub = r.substitution ? `<div class="subtag">⇄ Sostituisce ${esc(L.exName(d, slot.exerciseId))} · ${r.substitution === "permanent" ? "definitiva" : "solo oggi"}<button data-act="restore" data-slot="${slot.id}">Ripristina</button></div>` : "";
   return `<article class="card" data-card="${slot.id}">
     <div class="ex-head"><span class="dist">${esc(ex.district || slot.district || "")}</span>
@@ -115,6 +120,7 @@ function exerciseCard(d, c, s, slot) {
         <button class="setup-line ${ex.setup ? "" : "empty"}" data-act="setup-edit" data-ex="${r.exerciseId}">⚙︎ ${ex.setup ? esc(ex.setup) : "Regolazioni"}</button></div>
       <button class="icon-btn" data-act="ex-menu" data-slot="${slot.id}" aria-label="Altre azioni">⋯</button></div>
     ${sub}
+    ${coach ? `<details class="coach" data-coach="${slot.id}" ${coachOpen.has(slot.id) ? "open" : ""}><summary>Note del coach${/^https?:/i.test(slot.video || "") ? " e video" : ""}</summary><div class="notes">${coach}</div></details>` : ""}
     <div class="hist">${chips}</div>
     ${variantHtml}
     ${prevNote ? `<p class="hint prev-note">Ultima nota: ${esc(prevNote)}</p>` : ""}
@@ -166,6 +172,35 @@ function refreshProgress() {
   if ($("#sessBar")) $("#sessBar").style.width = `${p.total ? (p.done / p.total) * 100 : 0}%`;
 }
 
+/**
+ * Index of the set holding this session's record for the exercise, or -1. Only one set per exercise:
+ * the heaviest done set (more reps breaks a tie, the earlier one wins a full tie), and only if it beats
+ * every earlier session. Warm-ups never count.
+ */
+function prIndex(d, s, slot) {
+  const e = s.entries?.[slot.id];
+  if (!e) return -1;
+  const r = L.resolveSlot(cycleOfSession(s), slot, s);
+  const best = L.bestLoadBefore(d, r.exerciseId, s);
+  if (best == null) return -1;
+  let top = -1;
+  for (const i of [...L.countedIdx(r.blocks, s.week), ...L.extraIdx(e, r.blocks, s.week)]) {
+    const st = e.sets?.[i], t = e.sets?.[top];
+    if (!st?.done || st.load == null) continue;
+    if (top < 0 || st.load > t.load || (st.load === t.load && (st.reps ?? 0) > (t.reps ?? 0))) top = i;
+  }
+  return top >= 0 && e.sets[top].load > best ? top : -1;
+}
+
+/** Move the PR mark inside a card to the set that holds the record now. */
+function paintPR(slotId, k) {
+  $$(`[data-card="${slotId}"] .set`).forEach((row) => {
+    const on = +row.dataset.k === k;
+    row.classList.toggle("pr", on);
+    $(".n", row).innerHTML = on ? '<b class="pr-tag">PR</b>' : String(+row.dataset.k + 1);
+  });
+}
+
 function onCheck(btn) {
   unlockAudio();
   const row = btn.closest(".set");
@@ -173,18 +208,18 @@ function onCheck(btn) {
   const slotId = row.dataset.slot, k = +row.dataset.k;
   const done = !row.classList.contains("done");
   const values = readSet(row);
+  const slot0 = slotOf(s, slotId), prBefore = prIndex(D(), current(), slot0);
   withEntry(slotId, (e) => { e.sets[k] = { ...values, done, ...(done ? { at: store.now() } : {}) }; });
   row.classList.toggle("done", done);
   btn.setAttribute("aria-pressed", String(done));
   renderHeader(); refreshProgress();
   const slot = slotOf(s, slotId);
   const r = L.resolveSlot(cycleOfSession(s), slot, current());
-  const best = L.bestLoadBefore(D(), r.exerciseId, current());
-  const pr = done && !btn.dataset.warm && best != null && values.load != null && values.load > best;
-  row.classList.toggle("pr", pr);
-  $(".n", row).innerHTML = pr ? '<b class="pr-tag">PR</b>' : String(k + 1);
+  const prNow = prIndex(D(), current(), slot);
+  paintPR(slotId, prNow);
   if (!done) return;
-  if (pr) toast(`Nuovo record su ${L.exName(D(), r.exerciseId)}: ${L.fmtNum(values.load)} kg (prima ${L.fmtNum(best)} kg)`, { ms: 3500 });
+  // Announce the record once per exercise, when the first set beats it; later heavier sets just move the mark.
+  if (prNow === k && prBefore < 0) toast(`Nuovo record su ${L.exName(D(), r.exerciseId)}: ${L.fmtNum(values.load)} kg (prima ${L.fmtNum(L.bestLoadBefore(D(), r.exerciseId, current()))} kg)`, { ms: 3500 });
   startTimer(slot.rest, L.exName(D(), r.exerciseId));
   if (btn.dataset.mav && values.load != null) {
     const next = row.closest(".block").nextElementSibling;
@@ -545,18 +580,12 @@ Object.assign(actions, {
   },
   "ex-menu": (el) => {
     const s = current(), slot = slotOf(s, el.dataset.slot), r = L.resolveSlot(cycleOfSession(s), slot, s);
-    const notes = !r.substitution && coachNotes(slot);
     openMenu(L.exName(D(), r.exerciseId), [
       ["⇄ Sostituisci esercizio", "swap", `data-slot="${slot.id}"`],
       r.substitution && ["↺ Ripristina l'originale", "restore", `data-slot="${slot.id}"`],
       ["📈 Storico e progressione", "history", `data-ex="${r.exerciseId}"`],
       ["⏱ Avvia recupero ora", "rest", `data-slot="${slot.id}"`],
-      notes && ["▶︎ Note del coach e video", "coach", `data-slot="${slot.id}"`],
     ]);
-  },
-  coach: (el) => {
-    const s = current(), slot = slotOf(s, el.dataset.slot);
-    openModal(`<div><div class="label">Note del coach</div><h2>${esc(L.exName(D(), slot.exerciseId))}</h2></div><div class="notes">${coachNotes(slot)}</div><button class="btn ghost" data-act="close">Chiudi</button>`);
   },
   rest: (el) => {
     closeModal();

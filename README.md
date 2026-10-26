@@ -16,7 +16,7 @@ Funziona offline. I dati restano sul telefono e vengono sincronizzati in un file
 | **Report** | Confronto tra i cicli scelti: progressione dei carichi, volume per distretto, peso e circonferenze a inizio e fine. |
 | **⚙︎ Impostazioni** | Sincronizzazione, atleta e attrezzatura (bilancieri, dischi), catalogo esercizi, pagamento coaching, backup. |
 
-La **sessione** si apre a schermo intero. In alto ci sono settimana, data e avanzamento, poi una card per esercizio con serie, storico delle ultime due volte, regolazioni, serie extra e nota. Le azioni meno frequenti (sostituisci, storico e progressione, recupero, note del coach) stanno nel menu ⋯ della card. Cambiare data o settimana ed eliminare la sessione si fa dal menu ⋯ in alto.
+La **sessione** si apre a schermo intero. In alto ci sono settimana, data e avanzamento, poi una card per esercizio con regolazioni, note del coach e video (da aprire), storico delle ultime due volte, serie, serie extra e nota. Le azioni meno frequenti (sostituisci, storico e progressione, recupero) stanno nel menu ⋯ della card. Cambiare data o settimana ed eliminare la sessione si fa dal menu ⋯ in alto.
 
 ## 1. Pubblica l'app su GitHub Pages
 
@@ -85,7 +85,8 @@ Dove compare:
 - **Sostituzioni**: dal menu ⋯ dell'esercizio, solo per oggi o fino a fine ciclo. Lo schema si eredita o si modifica, uguale per tutte le settimane o diverso per ciascuna. Nel logbook il sostituto ha una riga sua.
 - **Varianti**: un esercizio può avere varianti progressive, impostate in Catalogo, una per riga (per esempio i leg raise: a terra, alla sbarra a ginocchia flesse, ecc.). In sessione scegli quella che fai, già proposta con l'ultima usata. Nello storico compare accanto alle serie, nel logbook sotto il nome ("S1 a terra · S2-3 alla sbarra, ginocchia flesse").
 - **Serie** scritte come ripetizioni × kg, per esempio `3×45 kg`. I carichi sono sempre solo dischi: con un bilanciere l'app mostra il totale e i dischi per lato.
-- **Record**: una serie più pesante di tutte le precedenti di quell'esercizio viene segnata PR.
+- **Record**: per ogni esercizio, in una sessione c'è al massimo un PR. Va sulla serie più pesante, se supera tutte le sessioni precedenti; a parità di carico vince quella con più ripetizioni. Il messaggio compare una volta sola.
+- **Precompilazione**: ripetizioni e carichi propongono quelli dell'ultima volta. Il target della scheda resta accanto ed è usato solo per un esercizio mai fatto.
 - **Grafici**: ogni vista mostra un periodo del calendario e le frecce vanno al periodo prima o dopo.
   - **Giorno**: i giorni di una settimana.
   - **Settimana**: le settimane di un mese.
