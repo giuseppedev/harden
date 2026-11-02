@@ -16,7 +16,9 @@ Funziona offline. I dati restano sul telefono e vengono sincronizzati in un file
 | **Report** | Confronto tra i cicli scelti: progressione dei carichi, volume per distretto, peso e circonferenze a inizio e fine. |
 | **⚙︎ Impostazioni** | Sincronizzazione, atleta e attrezzatura (bilancieri, dischi), catalogo esercizi, pagamento coaching, backup. |
 
-La **sessione** si apre a schermo intero. In alto ci sono settimana, data e avanzamento, poi una card per esercizio con regolazioni, note del coach e video (da aprire), storico delle ultime due volte, serie, serie extra e nota. Le azioni meno frequenti (sostituisci, storico e progressione, recupero) stanno nel menu ⋯ della card. Cambiare data o settimana ed eliminare la sessione si fa dal menu ⋯ in alto.
+La **sessione** si apre a schermo intero. In alto ci sono settimana, data e avanzamento, poi una card per esercizio con regolazioni, note del coach e video (da aprire), storico delle ultime due volte, serie, serie extra e nota. Le azioni meno frequenti (sostituisci, storico e progressione) stanno nel menu ⋯ della card. Il recupero parte da solo quando spunti una serie; "Termina sessione" è in fondo, dopo l'ultimo esercizio. Cambiare data o settimana ed eliminare la sessione si fa dal menu ⋯ in alto.
+
+Con una sessione in corso, in Scheda, Misure, Logbook e Report compare sopra i tab la barra **Riprendi la sessione**, che riporta all'allenamento nel punto in cui eri. In Home c'è già la card della sessione in corso. Durante l'allenamento, il riquadro in alto mostra anche l'ora di inizio. A fine allenamento il **riepilogo** mostra ora di inizio, ora di fine, durata (da "Inizia" a "Termina sessione") , poi le serie fatte, gli eventuali record e la serie migliore di ogni esercizio confrontata con l'ultima volta. Se la sessione è stata aperta più di 2 ore prima della prima serie, si parte dalla prima serie; se è stata chiusa più di 2 ore dopo l'ultima (per esempio il giorno dopo), ci si ferma all'ultima.
 
 ## 1. Pubblica l'app su GitHub Pages
 
@@ -85,9 +87,10 @@ Dove compare:
 - **Sostituzioni**: dal menu ⋯ dell'esercizio, solo per oggi o fino a fine ciclo. Lo schema si eredita o si modifica, uguale per tutte le settimane o diverso per ciascuna. Nel logbook il sostituto ha una riga sua.
 - **Varianti**: un esercizio può avere varianti progressive, impostate in Catalogo, una per riga (per esempio i leg raise: a terra, alla sbarra a ginocchia flesse, ecc.). In sessione scegli quella che fai, già proposta con l'ultima usata. Nello storico compare accanto alle serie, nel logbook sotto il nome ("S1 a terra · S2-3 alla sbarra, ginocchia flesse").
 - **Serie** scritte come ripetizioni × kg, per esempio `3×45 kg`. I carichi sono sempre solo dischi: con un bilanciere l'app mostra il totale e i dischi per lato.
-- **Record**: per ogni esercizio, in una sessione c'è al massimo un PR. Va sulla serie più pesante, se supera tutte le sessioni precedenti; a parità di carico vince quella con più ripetizioni. Il messaggio compare una volta sola.
+- **Record**: è record un carico mai sollevato prima, oppure un carico già fatto con più ripetizioni di sempre a quel peso o a pesi maggiori (10×100 dopo 8×100 sì; 8×90 dopo 10×100 no). La prima volta su un esercizio non è un record. Per ogni esercizio, in una sessione c'è al massimo un PR: va sulla serie migliore (più pesante, poi più ripetizioni). Il messaggio compare una volta sola.
 - **Precompilazione**: ripetizioni e carichi propongono quelli dell'ultima volta. Il target della scheda resta accanto ed è usato solo per un esercizio mai fatto.
-- **Grafici**: ogni vista mostra un periodo del calendario e le frecce vanno al periodo prima o dopo.
+- **Grafici**: ogni vista mostra un periodo del calendario e le frecce vanno al periodo prima o dopo. Il grafico si apre sul periodo con il dato più recente. Nello storico di un esercizio, nelle viste giorno e settimana ogni sessione è un punto a sé (due sessioni nella stessa settimana non vengono mediate); in mese e anno ogni punto è il carico migliore del periodo.
+- **Ordine dello storico**: segue il programma, cioè ciclo, poi settimana, poi data. Una sessione della settimana 1 registrata in ritardo resta prima della settimana 2, sia nello storico della card sia nel precompilato. Se l'esercizio compare in un'altra scheda, accanto alla settimana c'è la lettera (es. "S1 C").
   - **Giorno**: i giorni di una settimana.
   - **Settimana**: le settimane di un mese.
   - **Mese**: i mesi dell'anno.

@@ -38,18 +38,39 @@ function progressOf(s) {
   const slots = cycleOfSession(s).sheets[s.sheet] || [];
   return { done: slots.filter((sl) => L.doneSets(s.entries?.[sl.id]).length).length, total: slots.length };
 }
-/** Minutes from the first to the last ticked set. */
-export function sessionMinutes(s) {
-  const times = Object.values(s.entries || {}).flatMap((e) => (e.sets || []).map((st) => st?.at)).filter(Boolean).sort();
-  return times.length >= 2 ? Math.round((new Date(times[times.length - 1]) - new Date(times[0])) / 60000) : null;
+/**
+ * Workout span { start, end } in ms, from "Inizia" (the session's creation) to "Termina". Guards for sessions not
+ * lived in real time: if the session was opened long before the first set (or logged afterwards) it starts at the
+ * first set; if it was closed long after the last set (e.g. the next day) it stops at the last set. Null without sets.
+ */
+const SLACK = 2 * 3600000;
+export function sessionSpan(s) {
+  const times = Object.values(s.entries || {}).flatMap((e) => (e.sets || []).map((st) => st?.at)).filter(Boolean).map(Date.parse).filter(Number.isFinite).sort((a, b) => a - b);
+  if (!times.length) return null;
+  const first = times[0], last = times[times.length - 1];
+  const created = Date.parse(s.createdAt), fin = Date.parse(s.finishedAt);
+  return { start: created <= first && first - created <= SLACK ? created : first, end: fin >= last && fin - last <= SLACK ? fin : last };
 }
+export function sessionMinutes(s) {
+  const sp = sessionSpan(s);
+  return sp && Math.max(1, Math.round((sp.end - sp.start) / 60000));
+}
+/** "18:05" in local time. */
+const clock = (ms) => new Date(ms).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+/** Time "Inizia" was tapped, only for a session started on its own day (not one logged afterwards). */
+function startedAt(s) {
+  const t = Date.parse(s.createdAt);
+  return Number.isFinite(t) && L.toISO(new Date(t)) === s.date ? clock(t) : "";
+}
+/** "48′" or "1h 05′". */
+export const fmtMinutes = (m) => (m == null ? "–" : m < 60 ? `${m}′` : `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}′`);
 
 /** One tappable row in a list of sessions (dashboard, Scheda › Sessioni). */
 export function sessionRow(s, { week = true } = {}) {
   const p = progressOf(s), min = sessionMinutes(s);
   const status = !s.finishedAt ? `<span class="tag">in corso</span>` : "";
   return `<li class="tap" data-act="open-session" data-id="${s.id}"><span><b>${esc(s.sheet)}</b> · ${esc(L.fmtDate(s.date))}${week ? ` · sett. ${s.week}` : ""} ${status}</span>
-    <span class="hint">${min != null ? `${min}′ · ` : ""}${p.done} di ${p.total} esercizi ›</span></li>`;
+    <span class="hint">${min != null ? `${fmtMinutes(min)} · ` : ""}${p.done} di ${p.total} esercizi ›</span></li>`;
 }
 
 /* ---------- View ---------- */
@@ -64,8 +85,8 @@ export function viewWorkout(d) {
   const slots = c.sheets[s.sheet] || [];
   const p = progressOf(s);
   return `
-  <section class="card sess-card"><div class="row"><div class="hint">Settimana ${s.week} · ${esc(L.fmtDate(s.date))} · <span id="sessProg">${p.done} di ${p.total}</span> esercizi${c.closed ? ` · ciclo ${c.number} chiuso` : ""}</div>
-    ${s.finishedAt ? `<button class="mini" data-act="workout-back">Fatto</button>` : `<button class="mini primary" data-act="finish">Termina</button>`}</div>
+  <section class="card sess-card"><div class="row"><div class="hint">Settimana ${s.week} · ${esc(L.fmtDate(s.date))}${startedAt(s) ? ` · inizio ${startedAt(s)}` : ""} · <span id="sessProg">${p.done} di ${p.total}</span> esercizi${c.closed ? ` · ciclo ${c.number} chiuso` : ""}</div>
+    ${s.finishedAt ? `<button class="mini" data-act="workout-back">Fatto</button>` : ""}</div>
     <div class="progress"><i id="sessBar" style="width:${p.total ? (p.done / p.total) * 100 : 0}%"></i></div></section>
   ${slots.map((slot) => exerciseCard(d, c, s, slot)).join("")}
   ${s.finishedAt ? "" : `<button class="btn" data-act="finish">Termina sessione</button>`}`;
@@ -81,7 +102,7 @@ function exerciseCard(d, c, s, slot) {
   const prevLast = prevRaw.filter(Boolean).pop();
   const hist = L.historyFor(d, r.exerciseId, { before: s }).slice(0, 2);
   const chips = hist.length
-    ? hist.map((h) => { const v = ex.variants?.length ? L.variantOf(d, h.entry) : ""; return `<span><b>${h.cycle.id === c.id ? "" : `C${h.cycle.number} `}S${h.session.week}${v ? ` · ${esc(v)}` : ""}:</b> ${L.countedSets(h).map(L.fmtSet).join(", ")}</span>`; }).join("")
+    ? hist.map((h) => { const v = ex.variants?.length ? L.variantOf(d, h.entry) : ""; return `<span><b>${h.cycle.id === c.id ? "" : `C${h.cycle.number} `}S${h.session.week}${h.session.sheet !== s.sheet ? ` ${esc(h.session.sheet)}` : ""}${v ? ` · ${esc(v)}` : ""}:</b> ${L.countedSets(h).map(L.fmtSet).join(", ")}</span>`; }).join("")
     : `<span>Mai fatto prima</span>`;
   const prK = prIndex(d, s, slot);
   let k = 0;
@@ -173,24 +194,18 @@ function refreshProgress() {
 }
 
 /**
- * Index of the set holding this session's record for the exercise, or -1. Only one set per exercise:
- * the heaviest done set (more reps breaks a tie, the earlier one wins a full tie), and only if it beats
- * every earlier session. Warm-ups never count.
+ * This session's record on a slot: { index, set, rec } or null. Only one set per exercise holds it: the best set
+ * that beats every earlier session, by load or by reps at a load already lifted (see L.recordOf). Warm-ups never count.
  */
-function prIndex(d, s, slot) {
+function slotRecord(d, s, slot) {
   const e = s.entries?.[slot.id];
-  if (!e) return -1;
+  if (!e) return null;
   const r = L.resolveSlot(cycleOfSession(s), slot, s);
-  const best = L.bestLoadBefore(d, r.exerciseId, s);
-  if (best == null) return -1;
-  let top = -1;
-  for (const i of [...L.countedIdx(r.blocks, s.week), ...L.extraIdx(e, r.blocks, s.week)]) {
-    const st = e.sets?.[i], t = e.sets?.[top];
-    if (!st?.done || st.load == null) continue;
-    if (top < 0 || st.load > t.load || (st.load === t.load && (st.reps ?? 0) > (t.reps ?? 0))) top = i;
-  }
-  return top >= 0 && e.sets[top].load > best ? top : -1;
+  const idx = [...L.countedIdx(r.blocks, s.week), ...L.extraIdx(e, r.blocks, s.week)].filter((i) => e.sets?.[i]?.done);
+  const best = L.bestRecord(idx.map((i) => e.sets[i]), L.loadedSetsBefore(d, r.exerciseId, s));
+  return best && { ...best, index: idx[best.index] };
 }
+const prIndex = (d, s, slot) => slotRecord(d, s, slot)?.index ?? -1;
 
 /** Move the PR mark inside a card to the set that holds the record now. */
 function paintPR(slotId, k) {
@@ -219,7 +234,7 @@ function onCheck(btn) {
   paintPR(slotId, prNow);
   if (!done) return;
   // Announce the record once per exercise, when the first set beats it; later heavier sets just move the mark.
-  if (prNow === k && prBefore < 0) toast(`Nuovo record su ${L.exName(D(), r.exerciseId)}: ${L.fmtNum(values.load)} kg (prima ${L.fmtNum(L.bestLoadBefore(D(), r.exerciseId, current()))} kg)`, { ms: 3500 });
+  if (prNow === k && prBefore < 0) { const pr = slotRecord(D(), current(), slot); toast(`Nuovo record su ${L.exName(D(), r.exerciseId)}: ${L.recordText(pr.set, pr.rec)}`, { ms: 3500 }); }
   startTimer(slot.rest, L.exName(D(), r.exerciseId));
   if (btn.dataset.mav && values.load != null) {
     const next = row.closest(".block").nextElementSibling;
@@ -299,20 +314,10 @@ export async function finishSession() {
   await runSync(`feat: log session ${s.sheet} week ${s.week} (${s.date})`, { quiet: true });
 }
 
-/** Figures for the end-of-session summary. Volume counts plates only (kg × reps), warm-ups excluded. */
+/** Figures for the end-of-session summary (warm-ups excluded). */
 function sessionSummary(d, s) {
   const c = cycleOfSession(s);
-  const out = { planned: 0, done: 0, volume: 0, prs: [], lines: [], minutes: sessionMinutes(s), prevVolume: null };
-  const volumeOf = (sess) => {
-    let v = 0;
-    for (const slot of c.sheets[sess.sheet] || []) {
-      const e = sess.entries?.[slot.id];
-      if (!e) continue;
-      const r = L.resolveSlot(c, slot, sess);
-      for (const st of L.countedSets({ session: sess, entry: e, blocks: r.blocks })) if (st.load != null && st.reps != null) v += st.load * st.reps;
-    }
-    return v;
-  };
+  const out = { planned: 0, done: 0, prs: [], lines: [], span: sessionSpan(s) };
   for (const slot of c.sheets[s.sheet] || []) {
     const r = L.resolveSlot(c, slot, s), e = s.entries?.[slot.id];
     out.planned += L.countedIdx(r.blocks, s.week).length;
@@ -322,38 +327,32 @@ function sessionSummary(d, s) {
     const top = L.bestSet(sets);
     if (!top) continue;
     const name = L.exName(d, r.exerciseId);
-    const best = L.bestLoadBefore(d, r.exerciseId, s);
-    if (best != null && top.load != null && top.load > best) out.prs.push({ name, load: top.load, prev: best });
+    const pr = slotRecord(d, s, slot);
+    if (pr) out.prs.push({ name, text: L.recordText(pr.set, pr.rec) });
     const prev = L.historyFor(d, r.exerciseId, { before: s })[0];
     out.lines.push({ name, now: top, prev: prev ? L.bestSet(L.countedSets(prev)) : null });
   }
-  out.volume = volumeOf(s);
-  const before = L.sessionsOf(d, c.id).filter((x) => x.sheet === s.sheet && x.id !== s.id && (x.date < s.date || (x.date === s.date && (x.createdAt || "") < (s.createdAt || "")))).pop();
-  if (before) out.prevVolume = volumeOf(before);
   return out;
 }
 
 function openSummary(s) {
-  const d = D(), r = sessionSummary(d, s);
+  const d = D(), r = sessionSummary(d, s), sp = r.span;
   const trend = (now, prev) => {
     if (!prev || now.load == null || prev.load == null) return `<span class="hint">prima volta</span>`;
     if (now.load > prev.load || (now.load === prev.load && (now.reps ?? 0) > (prev.reps ?? 0))) return `<span class="up">↑ ${esc(L.fmtSet(prev))}</span>`;
     if (now.load < prev.load || (now.reps ?? 0) < (prev.reps ?? 0)) return `<span class="down">↓ ${esc(L.fmtSet(prev))}</span>`;
     return `<span class="hint">= come l'ultima volta</span>`;
   };
-  const volDelta = r.prevVolume ? Math.round(((r.volume - r.prevVolume) / r.prevVolume) * 100) : null;
-  openModal(`<div><div class="label">Sessione completata</div><h2>Scheda ${esc(s.sheet)} · Settimana ${s.week}</h2></div>
-    <div class="tiles four">
-      <div class="tile"><b>${r.minutes != null ? `${r.minutes}′` : "–"}</b><span>durata</span></div>
-      <div class="tile"><b>${r.done}/${r.planned}</b><span>serie</span></div>
-      <div class="tile"><b>${L.fmtNum(Math.round(r.volume))}</b><span>kg sollevati</span></div>
-      <div class="tile"><b>${r.prs.length}</b><span>record</span></div>
-    </div>
-    ${volDelta != null ? `<p class="hint" style="font-size:14px">Volume ${volDelta >= 0 ? "+" : ""}${volDelta}% rispetto alla scheda ${esc(s.sheet)} precedente.</p>` : ""}
-    ${r.prs.length ? `<div class="banner">🏆 ${r.prs.map((p) => `${esc(p.name)}: ${L.fmtNum(p.load)} kg (prima ${L.fmtNum(p.prev)})`).join(" · ")}</div>` : ""}
+  const min = sp && Math.max(1, Math.round((sp.end - sp.start) / 60000));
+  openModal(`<div><div class="label">Sessione completata · ${esc(L.fmtDate(s.date))}</div><h2>Scheda ${esc(s.sheet)} · Settimana ${s.week}</h2></div>
+    ${sp ? `<div class="span-line" aria-label="Dalle ${clock(sp.start)} alle ${clock(sp.end)}, ${fmtMinutes(min)}">
+      <div><span>inizio</span><b>${clock(sp.start)}</b></div>
+      <div class="track"><i>${fmtMinutes(min)}</i></div>
+      <div class="end"><span>fine</span><b>${clock(sp.end)}</b></div></div>` : ""}
+    <p class="hint" style="font-size:14px">${r.done} di ${r.planned} serie fatte.</p>
+    ${r.prs.length ? `<div class="banner">🏆 ${r.prs.map((p) => `${esc(p.name)}: ${esc(p.text)}`).join(" · ")}</div>` : ""}
     <div class="label">Serie migliore per esercizio</div>
     <ul class="list">${r.lines.map((l) => `<li><span>${esc(l.name)}</span><span class="val"><b>${esc(L.fmtSet(l.now))}</b>${trend(l.now, l.prev)}</span></li>`).join("")}</ul>
-    <p class="hint">Durata dalla prima all'ultima serie spuntata. Il volume conta solo i dischi, senza serie di avvicinamento.</p>
     <button class="btn" data-act="close">Fatto</button>`);
 }
 
@@ -517,9 +516,9 @@ export function openHistory(exerciseId) {
   const hist = L.historyFor(d, exerciseId);
   const pts = hist.map((h) => ({ date: h.session.date, v: L.bestSet(L.countedSets(h))?.load })).filter((x) => x.v != null).reverse();
   openModal(`<div><div class="label">Storico e progressione</div><h2>${esc(L.exName(d, exerciseId))}</h2></div>
-    ${pts.length ? `<div class="label">Carico migliore (dischi)</div>${chartBlock(`ex-${exerciseId}`, pts, "kg", "W")}` : ""}
+    ${pts.length ? `<div class="label">Carico migliore (dischi)</div>${chartBlock(`ex-${exerciseId}`, pts, "kg", "W", { sessions: true })}` : ""}
     ${hist.length ? `<div class="tbl-wrap"><table class="tbl"><tr><th>Data</th><th>Ciclo</th><th>Serie (rip × kg)</th></tr>
-    ${hist.map((h) => `<tr><td>${esc(L.fmtDate(h.session.date, { weekday: false, year: true }))}</td><td>C${h.cycle.number} S${h.session.week}</td><td style="white-space:normal">${L.exerciseOf(d, exerciseId)?.variants?.length ? `<b>${esc(L.variantOf(d, h.entry))}</b> · ` : ""}${L.countedSets(h).map(L.fmtSet).join(", ")}${h.entry.note ? `<br><span class="hint">${esc(h.entry.note)}</span>` : ""}</td></tr>`).join("")}</table></div>` : `<p class="hint">Nessuna serie registrata finora.</p>`}
+    ${hist.map((h) => `<tr><td>${esc(L.fmtDate(h.session.date, { weekday: false, year: true }))}</td><td>C${h.cycle.number} S${h.session.week} ${esc(h.session.sheet)}</td><td style="white-space:normal">${L.exerciseOf(d, exerciseId)?.variants?.length ? `<b>${esc(L.variantOf(d, h.entry))}</b> · ` : ""}${L.countedSets(h).map(L.fmtSet).join(", ")}${h.entry.note ? `<br><span class="hint">${esc(h.entry.note)}</span>` : ""}</td></tr>`).join("")}</table></div>` : `<p class="hint">Nessuna serie registrata finora.</p>`}
     <button class="btn ghost" data-act="close">Chiudi</button>`);
 }
 
@@ -584,13 +583,7 @@ Object.assign(actions, {
       ["⇄ Sostituisci esercizio", "swap", `data-slot="${slot.id}"`],
       r.substitution && ["↺ Ripristina l'originale", "restore", `data-slot="${slot.id}"`],
       ["📈 Storico e progressione", "history", `data-ex="${r.exerciseId}"`],
-      ["⏱ Avvia recupero ora", "rest", `data-slot="${slot.id}"`],
     ]);
-  },
-  rest: (el) => {
-    closeModal();
-    const s = current(), slot = slotOf(s, el.dataset.slot);
-    startTimer(slot.rest, L.exName(D(), L.resolveSlot(cycleOfSession(s), slot, s).exerciseId));
   },
   swap: (el) => openSubstitution(el.dataset.slot),
   restore: (el) => restoreOriginal(el.dataset.slot),

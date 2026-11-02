@@ -50,6 +50,30 @@ test("nextSuggestion moves to the next sheet, then to the next week", () => {
   assert.deepEqual(L.nextSuggestion({ sessions: [done("A", 1, "2026-01-01"), done("B", 1, "2026-01-02")] }, c), { sheet: "A", week: 2 });
 });
 
+test("historyFor follows the programme: a week-1 session logged late still comes before week 2", () => {
+  const c = cycle({ sheets: { A: [slot], C: [{ ...slot, id: "C1" }] } });
+  const set = { done: true, reps: 10, load: 50 };
+  const ses = (id, sheet, week, date) => ({ id, cycleId: "c1", sheet, week, date, createdAt: date, finishedAt: date, entries: { [sheet + "1"]: { sets: [set] } } });
+  const a1 = ses("a1", "A", 1, "2026-01-01"), c1 = ses("c1s", "C", 1, "2026-01-09"), a2 = ses("a2", "A", 2, "2026-01-08");
+  const d = { cycles: [c], sessions: [a1, c1, a2] };
+  assert.deepEqual(L.historyFor(d, "bench", { before: a2 }).map((h) => h.session.id), ["c1s", "a1"]);
+  assert.deepEqual(L.historyFor(d, "bench").map((h) => h.session.id), ["a2", "c1s", "a1"]);
+});
+
+test("recordOf: heavier load, or more reps at a load already lifted", () => {
+  const earlier = [{ load: 100, reps: 8 }, { load: 90, reps: 10 }, { load: 80, reps: 12 }];
+  assert.equal(L.recordOf({ load: 105, reps: 3 }, earlier).kind, "load");
+  assert.deepEqual(L.recordOf({ load: 100, reps: 10 }, earlier), { kind: "reps", prev: { load: 100, reps: 8 } });
+  assert.equal(L.recordOf({ load: 100, reps: 8 }, earlier), null, "same reps is not a record");
+  assert.equal(L.recordOf({ load: 90, reps: 9 }, earlier), null);
+  assert.equal(L.recordOf({ load: 80, reps: 10 }, earlier), null, "10×90 already beats it");
+  assert.equal(L.recordOf({ load: 95, reps: 12 }, earlier), null, "a load never lifted is not a reps record");
+  assert.equal(L.recordOf({ load: 50, reps: 5 }, []), null, "the first time is never a record");
+  const best = L.bestRecord([{ load: 100, reps: 9 }, { load: 100, reps: 11 }, { load: 90, reps: 12 }], earlier);
+  assert.deepEqual([best.index, best.rec.kind], [1, "reps"]);
+  assert.equal(L.recordText({ load: 100, reps: 11 }, best.rec), "11×100 kg (prima 8×100 kg)");
+});
+
 test("bucketSeries: day view is one calendar week, month view one year", () => {
   const pts = [{ date: today, v: 78 }, { date: L.addDays(today, -1), v: 78.2 }, { date: L.addDays(today, -9), v: 79 }];
   const wk = L.bucketSeries(pts, "D", 0);

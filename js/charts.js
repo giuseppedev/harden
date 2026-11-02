@@ -4,22 +4,32 @@ import * as L from "./logic.js";
 
 const chartData = {};
 
-/** `decimals` fixes the number of decimals shown (e.g. 2 for body weight: 77,85). */
-export function chartBlock(id, points, unit, defaultGran, { table = false, decimals = null } = {}) {
-  chartData[id] = { points, unit, table, decimals };
+/**
+ * `decimals` fixes the number of decimals shown (e.g. 2 for body weight: 77,85).
+ * `sessions` is for exercise progression: in the day and week views every session is its own point (two sessions
+ * in the same week are not averaged together); in the month and year views each point is the best of the period.
+ */
+export function chartBlock(id, points, unit, defaultGran, { table = false, decimals = null, sessions = false } = {}) {
+  chartData[id] = { points, unit, table, decimals, sessions };
   ui.charts[id] ??= { g: defaultGran, off: 0 };
   return `<div class="chart stack" data-chart="${id}">${chartInner(id)}</div>`;
 }
 
 function chartInner(id) {
-  const { points, unit, table, decimals } = chartData[id];
+  const { points, unit, table, decimals, sessions } = chartData[id];
   const st = ui.charts[id];
   const r = L.bucketSeries(points, st.g, st.off);
   const seg = `<div class="gran" role="group" aria-label="Raggruppa per">${L.GRANULARITIES.map((g) => `<button class="${g.k === st.g ? "sel" : ""}" data-act="chart-g" data-chart="${id}" data-g="${g.k}" aria-pressed="${g.k === st.g}">${g.name}</button>`).join("")}</div>`;
   if (!r.buckets.length) return seg + `<p class="hint">Nessun dato.</p>`;
-  const filled = r.buckets.filter((b) => b.v != null);
+  const raw = sessions && (st.g === "D" || st.g === "W");
+  let filled = r.buckets.filter((b) => b.v != null);
+  if (raw) {
+    const from = r.buckets[0].start, last = r.buckets[r.buckets.length - 1].start, to = st.g === "D" ? last : L.addDays(last, 6);
+    filled = points.filter((p) => p.date >= from && p.date <= to).sort((a, b) => (a.date > b.date ? 1 : -1))
+      .map((p) => ({ label: L.fmtDate(p.date, { weekday: false, year: true }), short: L.fmtDate(p.date, { weekday: false }), v: p.v, n: 1, alt: p.alt ? 1 : 0 }));
+  } else if (sessions) filled = filled.map((b) => ({ ...b, v: b.max }));
   const nav = `<div class="nav-row"><button class="icon-btn" data-act="chart-pan" data-chart="${id}" data-dir="1" ${r.hasOlder ? "" : "disabled"} aria-label="Periodo precedente">‹</button>
-    <div class="nav-date"><b>${esc(r.title)}</b><span class="hint">${st.off ? `${st.off} ${st.off === 1 ? "periodo" : "periodi"} fa` : "periodo attuale"}</span></div>
+    <div class="nav-date"><b>${esc(r.title)}</b><span class="hint">${st.off ? `${st.off} ${st.off === 1 ? "periodo" : "periodi"} fa` : "periodo più recente"}</span></div>
     <button class="icon-btn" data-act="chart-pan" data-chart="${id}" data-dir="-1" ${r.hasNewer ? "" : "disabled"} aria-label="Periodo successivo">›</button></div>`;
   if (!filled.length) return seg + nav + `<p class="hint empty">Nessun valore in questo periodo.</p>`;
   // One column per recorded value, evenly spaced, each with its value and date: no side axis to match by eye.
@@ -48,7 +58,7 @@ function chartInner(id) {
   const vals = filled.map((b) => b.v), avg = vals.reduce((a, b) => a + b, 0) / vals.length;
   const summary = `<div class="chart-sum"><span>Media <b>${fmt(avg)}</b></span><span>Min <b>${fmt(Math.min(...vals))}</b></span><span>Max <b>${fmt(Math.max(...vals))}</b></span>${filled.length > 1 ? `<span>Variazione <b>${L.fmtDelta(lastB.v, filled[0].v, decimals)}</b></span>` : ""}</div>`;
   const altNote = filled.some((b) => b.alt) ? `<p class="hint"><span class="alt-dot"></span> Punti arancioni: ${st.g === "D" ? "pesata" : "periodo con almeno una pesata"} su un'altra bilancia, può esserci uno scarto.</p>` : "";
-  const note = (st.g === "D" ? "" : `<p class="hint">Ogni punto è la media del periodo.</p>`) + altNote;
+  const note = (raw || st.g === "D" ? "" : `<p class="hint">${sessions ? "Ogni punto è il carico migliore del periodo." : "Ogni punto è la media del periodo."}</p>`) + altNote;
   const tbl = table ? `<div class="tbl-wrap"><table class="tbl"><tr><th>Periodo</th><th class="num">${unit}</th><th class="num">vs prec.</th><th class="num">valori</th></tr>
     ${filled.slice().reverse().map((b, j, a) => `<tr><td>${esc(b.label)}${b.alt ? ' <span class="scale-tag">altra bil.</span>' : ""}</td><td class="num">${fmt(b.v)}</td><td class="num delta">${a[j + 1] ? L.fmtDelta(b.v, a[j + 1].v, decimals) : ""}</td><td class="num">${b.n}</td></tr>`).join("")}</table></div>` : "";
   return seg + nav + svg + summary + note + tbl;

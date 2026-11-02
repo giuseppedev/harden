@@ -3,20 +3,20 @@ import * as store from "../data.js";
 import * as L from "../logic.js";
 import { esc, D, ui, actions, go, byDate } from "../core.js";
 import { sparkline } from "../charts.js";
-import { sessionRow, sessionMinutes, startSession, openSessionView } from "./session.js";
+import { sessionRow, sessionMinutes, fmtMinutes, startSession, openSessionView } from "./session.js";
 import { openWeightForm, openMeasureForm } from "./measures.js";
 import { reminders } from "../reminders.js";
 
-/** Personal bests in chronological order (a set heavier than every earlier one on that exercise), newest first. */
+/** Personal records in chronological order (heavier load, or more reps at a load already lifted), newest first. */
 function recentRecords(d, n = 3) {
   const out = [];
   for (const ex of store.live(d.exercises)) {
-    let best = null;
+    const earlier = [];
     for (const h of L.historyFor(d, ex.id).reverse()) {
-      const top = L.bestSet(L.countedSets(h));
-      if (top?.load == null) continue;
-      if (best != null && top.load > best) out.push({ name: ex.name, load: top.load, prev: best, date: h.session.date });
-      best = Math.max(best ?? -Infinity, top.load);
+      const sets = L.countedSets(h).filter((st) => st.load != null);
+      const pr = L.bestRecord(sets, earlier);
+      if (pr) out.push({ name: ex.name, set: pr.set, kind: pr.rec.kind, date: h.session.date });
+      earlier.push(...sets);
     }
   }
   return out.sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, n);
@@ -55,7 +55,7 @@ function nowCard(d, c, letters) {
   const lastSame = L.sessionsOf(d, c.id).filter((s) => s.sheet === sug.sheet && s.finishedAt).pop();
   const min = lastSame && sessionMinutes(lastSame);
   return `<section class="card next stack"><div class="label">Prossima · settimana ${sug.week}</div>
-    <div class="row"><div><div class="big">${esc(sug.sheet)}</div><div class="hint" style="font-size:14px">${slots.length} esercizi${min ? ` · ~${min}′ l'ultima volta` : ""}</div></div>
+    <div class="row"><div><div class="big">${esc(sug.sheet)}</div><div class="hint" style="font-size:14px">${slots.length} esercizi${min ? ` · ~${fmtMinutes(min)} l'ultima volta` : ""}</div></div>
     <button class="btn" data-act="start" data-sheet="${esc(sug.sheet)}" data-week="${sug.week}">Inizia ${esc(sug.sheet)}</button></div>
     <div class="grid4">${letters.map((l) => {
       const isDone = L.doneInWeek(d, c, l, sug.week);
@@ -86,7 +86,7 @@ function records(d) {
   const prs = recentRecords(d);
   if (!prs.length) return "";
   return `<section class="card stack"><div class="label">Ultimi record</div>
-    <ul class="list">${prs.map((p) => `<li><span>🏆 ${esc(p.name)}</span><span class="val"><b>${L.fmtNum(p.load)} kg</b><span class="hint">${esc(L.fmtDate(p.date, { weekday: false }))}</span></span></li>`).join("")}</ul></section>`;
+    <ul class="list">${prs.map((p) => `<li><span>🏆 ${esc(p.name)}</span><span class="val"><b>${p.kind === "load" ? `${L.fmtNum(p.set.load)} kg` : esc(L.fmtSet(p.set))}</b><span class="hint">${esc(L.fmtDate(p.date, { weekday: false }))}</span></span></li>`).join("")}</ul></section>`;
 }
 
 Object.assign(actions, {

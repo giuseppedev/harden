@@ -148,6 +148,15 @@ details p b { color: var(--fg); }
 .tbl .num { font-family: var(--body); font-variant-numeric: tabular-nums; font-variant-numeric: tabular-nums; text-align: right; }
 .up { color: var(--done); font-weight: 700; }
 .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+/* Summary: start and end time joined by a line carrying the duration. */
+.span-line { display: grid; grid-template-columns: auto 1fr auto; align-items: end; gap: 12px; background: var(--bg); border-radius: 12px; padding: 12px 14px; }
+.span-line span { display: block; font-size: 12px; color: var(--muted); }
+.span-line b { font-family: var(--display); font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.span-line .end { text-align: right; }
+.span-line .track { position: relative; display: flex; justify-content: center; align-items: center; height: 31px; }
+.span-line .track::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 2px solid var(--accent); opacity: .35; }
+.span-line .track::after { content: ""; position: absolute; left: -4px; right: -4px; top: calc(50% - 3px); height: 8px; background: radial-gradient(circle, var(--accent) 3.5px, transparent 4px) left center / 8px 8px no-repeat, radial-gradient(circle, var(--accent) 3.5px, transparent 4px) right center / 8px 8px no-repeat; }
+.span-line .track i { position: relative; z-index: 1; font-style: normal; font-weight: 700; font-size: 14px; color: var(--accent); background: var(--accent-soft); border-radius: 999px; padding: 3px 10px; white-space: nowrap; }
 .tile { background: var(--bg); border-radius: 10px; padding: 10px; }
 .tile b { display: block; font-family: var(--display); font-size: 28px; line-height: 1.1; }
 .tile span { font-size: 12px; color: var(--muted); }
@@ -269,8 +278,6 @@ details p b { color: var(--fg); }
 .trend .vlabel.alt { fill: var(--rest); }
 
 /* v1.7: summary, undo toast */
-.tiles.four { grid-template-columns: repeat(4, 1fr); }
-.tiles.four .tile b { font-size: 28px; }
 .down { color: var(--danger); font-weight: 700; }
 .list li .val .up, .list li .val .down { font-size: 12px; }
 .toast.undo { display: flex; gap: 14px; align-items: center; }
@@ -366,3 +373,8 @@ details.coach { margin-top: 10px; border-top: 0; padding-top: 0; }
 details.coach summary { min-height: 44px; display: flex; align-items: center; font-size: 14px; }
 details.coach .notes { padding-bottom: 4px; }
 #appHeader h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Resume bar: back to the open session from any section */
+.resume { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-height: 48px; border: 0; border-bottom: 1px solid var(--line); background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 16px; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); text-align: left; }
+.resume .hint { color: var(--accent); font-weight: 500; }
+body.has-resume { padding-bottom: calc(200px + env(safe-area-inset-bottom, 0px)); }

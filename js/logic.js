@@ -136,7 +136,13 @@ export function resolveSlot(cycle, slot, session) {
 
 /* ---------- Sessions ---------- */
 const sessionKey = (s) => `${s.date}|${s.createdAt || ""}`;
-export const sessionsOf = (d, cycleId) => live(d.sessions).filter((s) => s.cycleId === cycleId).sort((a, b) => (sessionKey(a) > sessionKey(b) ? 1 : -1));
+/**
+ * Training order: cycle, then week, then date. A week-1 session logged late (or dated after a week-2 one)
+ * still comes before week 2, so history, prefill and "last time" follow the programme, not the calendar.
+ */
+const pad4 = (n) => String(n ?? 0).padStart(4, "0");
+export const sessionOrder = (d, s) => `${pad4(d.cycles?.find((c) => c.id === s.cycleId)?.number)}|${pad4(s.week)}|${sessionKey(s)}`;
+export const sessionsOf = (d, cycleId) => live(d.sessions).filter((s) => s.cycleId === cycleId).sort((a, b) => (sessionOrder(d, a) > sessionOrder(d, b) ? 1 : -1));
 export const doneSets = (entry) => (entry?.sets || []).filter((s) => s && s.done);
 export const sessionHasWork = (s) => Object.values(s.entries || {}).some((e) => doneSets(e).length > 0);
 export const openSession = (d) => live(d.sessions).filter((s) => !s.finishedAt).sort((a, b) => (sessionKey(a) > sessionKey(b) ? -1 : 1))[0] || null;
@@ -155,9 +161,9 @@ export const doneInWeek = (d, cycle, sheet, week) => sessionsOf(d, cycle.id).som
 /* ---------- History ---------- */
 /** Every logged appearance of an exercise, newest first, across all cycles. */
 export function historyFor(d, exerciseId, { before = null } = {}) {
-  const out = [];
+  const out = [], limit = before && sessionOrder(d, before);
   for (const s of live(d.sessions)) {
-    if (before && (s.id === before.id || sessionKey(s) >= sessionKey(before))) continue;
+    if (before && (s.id === before.id || sessionOrder(d, s) >= limit)) continue;
     const c = d.cycles.find((x) => x.id === s.cycleId && !x.deleted);
     if (!c) continue;
     for (const slot of c.sheets[s.sheet] || []) {
@@ -168,7 +174,7 @@ export function historyFor(d, exerciseId, { before = null } = {}) {
       out.push({ session: s, cycle: c, slot, entry: e, blocks: r.blocks });
     }
   }
-  return out.sort((a, b) => (sessionKey(a.session) > sessionKey(b.session) ? -1 : 1));
+  return out.sort((a, b) => (sessionOrder(d, a.session) > sessionOrder(d, b.session) ? -1 : 1));
 }
 /** Extra sets added beyond the coach's targets sit after the planned ones. */
 export function extraIdx(entry, blocks, w) {
@@ -180,14 +186,38 @@ export function countedSets(item) {
   const idx = [...countedIdx(item.blocks, item.session.week), ...extraIdx(item.entry, item.blocks, item.session.week)];
   return idx.map((i) => item.entry.sets?.[i]).filter((s) => s && s.done);
 }
-/** Heaviest load ever lifted on an exercise before a given session (warm-ups excluded). */
-export function bestLoadBefore(d, exerciseId, session) {
-  let best = null;
-  for (const h of historyFor(d, exerciseId, { before: session })) {
-    for (const st of countedSets(h)) if (st.load != null && (best == null || st.load > best)) best = st.load;
-  }
-  return best;
+/** Every counted set (warm-ups excluded) with a load, logged on an exercise before a given session. */
+export function loadedSetsBefore(d, exerciseId, session) {
+  return historyFor(d, exerciseId, { before: session }).flatMap((h) => countedSets(h)).filter((st) => st.load != null);
 }
+/**
+ * Whether a set is a personal record against earlier sets: a load heavier than ever ("load"), or a load already
+ * lifted done for more reps than ever at that load or heavier ("reps": 10×100 after 8×100, but not 8×90 after
+ * 10×100). Returns { kind, prev } with the set it beats, or null. The first time on an exercise is never a record.
+ */
+export function recordOf(set, earlier) {
+  if (!set || set.load == null || !earlier.length) return null;
+  const top = bestSet(earlier);
+  if (set.load > top.load) return { kind: "load", prev: top };
+  if (set.reps == null) return null;
+  const same = earlier.filter((e) => e.load === set.load);
+  if (!same.length) return null;
+  const heavier = earlier.filter((e) => e.load >= set.load);
+  if (set.reps <= Math.max(...heavier.map((e) => e.reps ?? 0))) return null;
+  return { kind: "reps", prev: same.reduce((b, e) => ((e.reps ?? 0) > (b.reps ?? 0) ? e : b)) };
+}
+/** The best record among some sets (heaviest, then most reps, the earlier one on a full tie): { set, index, rec } or null. */
+export function bestRecord(sets, earlier) {
+  let out = null;
+  sets.forEach((set, index) => {
+    const rec = recordOf(set, earlier);
+    if (!rec) return;
+    if (!out || set.load > out.set.load || (set.load === out.set.load && (set.reps ?? 0) > (out.set.reps ?? 0))) out = { set, index, rec };
+  });
+  return out;
+}
+/** "105 kg (prima 100 kg)" for a heavier load, "10×100 kg (prima 8×100 kg)" for more reps. */
+export const recordText = (set, rec) => (rec.kind === "load" ? `${fmtNum(set.load)} kg (prima ${fmtNum(rec.prev.load)} kg)` : `${fmtSet(set)} (prima ${fmtSet(rec.prev)})`);
 export function bestSet(sets) {
   return (sets || []).reduce((b, s) => (!b || (s.load ?? 0) > (b.load ?? 0) || ((s.load ?? 0) === (b.load ?? 0) && (s.reps ?? 0) > (b.reps ?? 0)) ? s : b), null);
 }
@@ -362,7 +392,7 @@ function chartWindow(date, g, offset) {
 
 /**
  * Average a dated series into buckets and return one calendar window of them (see chartWindow).
- * `offset` 0 is the window with the newest value (or today); 1 is the one before, and so on.
+ * `offset` 0 is the window with the newest value; 1 is the one before, and so on.
  */
 export function bucketSeries(points, g, offset = 0) {
   if (!points.length) return { buckets: [], hasOlder: false, hasNewer: false, title: "" };
@@ -375,7 +405,7 @@ export function bucketSeries(points, g, offset = 0) {
   }
   const latest = points.reduce((a, p) => (p.date > a ? p.date : a), points[0].date);
   const oldest = bucketStart(points.reduce((a, p) => (p.date < a ? p.date : a), points[0].date), g);
-  const win = chartWindow(latest > todayISO() ? latest : todayISO(), g, offset);
+  const win = chartWindow(latest, g, offset); // opens on the period with the newest value, never on an empty one
   const buckets = [];
   for (let start = bucketStart(win.from, g); start <= win.to; start = shiftBucket(start, g, 1)) {
     const s = sums.get(start);

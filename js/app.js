@@ -42,6 +42,19 @@ function renderHeader() {
   $$(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === ui.view)));
   const m = $(".tabs [data-view=measures]");
   if (m) m.className = dotFor(d, "measures");
+  renderResumeBar(d);
+}
+
+/** While a session is open, a bar above the tabs takes you back to it from every section but Home. */
+function renderResumeBar(d) {
+  const bar = $("#resumeBar"), open = d && store.hasData() && !["workout", "home"].includes(ui.view) ? L.openSession(d) : null; // Home has its own card
+  bar.hidden = !open;
+  document.body.classList.toggle("has-resume", !!open);
+  if (!open) return;
+  const c = d.cycles.find((x) => x.id === open.cycleId), slots = c?.sheets[open.sheet] || [];
+  const n = slots.filter((sl) => L.doneSets(open.entries?.[sl.id]).length).length;
+  bar.dataset.id = open.id;
+  bar.innerHTML = `<span>▶︎ Riprendi la sessione</span><span class="hint">Scheda ${esc(open.sheet)} · ${n} di ${slots.length} esercizi</span>`;
 }
 
 function render() {
