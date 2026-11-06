@@ -516,7 +516,7 @@ export function openHistory(exerciseId) {
   const hist = L.historyFor(d, exerciseId);
   const pts = hist.map((h) => ({ date: h.session.date, v: L.bestSet(L.countedSets(h))?.load })).filter((x) => x.v != null).reverse();
   openModal(`<div><div class="label">Storico e progressione</div><h2>${esc(L.exName(d, exerciseId))}</h2></div>
-    ${pts.length ? `<div class="label">Carico migliore (dischi)</div>${chartBlock(`ex-${exerciseId}`, pts, "kg", "W", { sessions: true })}` : ""}
+    ${pts.length ? `<div class="label">Carico migliore (dischi)</div>${chartBlock(`ex-${exerciseId}`, pts, "kg", "Q", { sessions: true })}` : ""}
     ${hist.length ? `<div class="tbl-wrap"><table class="tbl"><tr><th>Data</th><th>Ciclo</th><th>Serie (rip × kg)</th></tr>
     ${hist.map((h) => `<tr><td>${esc(L.fmtDate(h.session.date, { weekday: false, year: true }))}</td><td>C${h.cycle.number} S${h.session.week} ${esc(h.session.sheet)}</td><td style="white-space:normal">${L.exerciseOf(d, exerciseId)?.variants?.length ? `<b>${esc(L.variantOf(d, h.entry))}</b> · ` : ""}${L.countedSets(h).map(L.fmtSet).join(", ")}${h.entry.note ? `<br><span class="hint">${esc(h.entry.note)}</span>` : ""}</td></tr>`).join("")}</table></div>` : `<p class="hint">Nessuna serie registrata finora.</p>`}
     <button class="btn ghost" data-act="close">Chiudi</button>`);

@@ -39,7 +39,7 @@ function weightTab(ws, rem) {
     <div class="deltas">${week && week !== last ? `<span>7 giorni <b>${L.fmtDelta(last.kg, week.kg, 2)}${flag(last, week)}</b></span>` : ""}${ws.length > 1 ? `<span>Dal primo <b>${L.fmtDelta(last.kg, first.kg, 2)}${flag(last, first)}</b></span>` : ""}<span>${ws.length} ${ws.length === 1 ? "pesata" : "pesate"}</span></div>
     <button class="btn" data-act="weight-new">+ Registra peso</button>
   </section>
-  <section class="card stack"><h2>Andamento</h2>${chartBlock("weight", ws.map((w) => ({ date: w.date, v: w.kg, alt: w.scale === "other" })), "kg", "D", { decimals: 2 })}</section>
+  <section class="card stack"><h2>Andamento</h2>${chartBlock("weight", ws.map((w) => ({ date: w.date, v: w.kg, alt: w.scale === "other" })), "kg", "W", { decimals: 2 })}</section>
   <section class="card stack"><h2>Storico</h2>
     <div class="groups">${groupBy(ws.slice().reverse(), (w) => w.date.slice(0, 7)).map((g, gi) => {
       const [yy, mm] = g.key.split("-"), avg = g.items.reduce((a, w) => a + w.kg, 0) / g.items.length, alts = g.items.filter((w) => w.scale === "other").length;
@@ -67,7 +67,7 @@ function circTab(ms, rem) {
     <button class="btn" data-act="measure-new">+ Nuova misurazione</button>
   </section>
   <section class="card stack"><div class="row"><h2>${esc(m.name)}</h2><span class="hint">tocca un riquadro per cambiare</span></div>
-    ${pts.length ? chartBlock(`m-${k}`, pts, "cm", "W") : `<p class="hint">Nessun valore registrato per questa misura.</p>`}</section>
+    ${pts.length ? chartBlock(`m-${k}`, pts, "cm", "Y") : `<p class="hint">Nessun valore registrato per questa misura.</p>`}</section>
   <section class="card stack"><h2>Storico</h2>
     <div class="groups">${groupBy(ms.slice().reverse(), (e) => e.date.slice(0, 4)).map((g, gi) => `<details ${gi === 0 ? "open" : ""}><summary><span>${g.key}</span><span class="hint">${g.items.length} ${g.items.length === 1 ? "misurazione" : "misurazioni"}</span></summary>
       <ul class="list">${g.items.map((e) => `<li class="tap" data-act="measure-open" data-id="${e.id}"><span>${esc(L.fmtDate(e.date))}</span><span class="val"><span class="hint">${e.values[k] != null ? `${esc(m.name.toLowerCase())} ${L.fmtNum(e.values[k])}` : `${Object.keys(e.values).length} misure`}</span> ›</span></li>`).join("")}</ul></details>`).join("")}</div>

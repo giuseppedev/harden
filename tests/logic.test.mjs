@@ -74,13 +74,46 @@ test("recordOf: heavier load, or more reps at a load already lifted", () => {
   assert.equal(L.recordText({ load: 100, reps: 11 }, best.rec), "11×100 kg (prima 8×100 kg)");
 });
 
-test("bucketSeries: day view is one calendar week, month view one year", () => {
-  const pts = [{ date: today, v: 78 }, { date: L.addDays(today, -1), v: 78.2 }, { date: L.addDays(today, -9), v: 79 }];
-  const wk = L.bucketSeries(pts, "D", 0);
-  assert.equal(wk.buckets.length, 7);
-  assert.equal(wk.buckets[0].start, L.bucketStart(today, "W"));
-  assert.equal(L.bucketSeries(pts, "M", 0).buckets.length, 12);
-  assert.equal(L.bucketSeries(pts, "D", 1).title.length > 0, true);
+test("chart ranges: calendar week, month, quarter and year", () => {
+  assert.deepEqual(L.rangeWindow("2026-11-06", "W"), { from: "2026-11-02", to: "2026-11-08", title: "2 – 8 nov 2026" });
+  assert.equal(L.rangeWindow("2026-11-06", "W", 1).title, "26 ott – 1 nov 2026");
+  assert.deepEqual(L.rangeWindow("2026-11-06", "M", 1), { from: "2026-10-01", to: "2026-10-31", title: "Ottobre 2026" });
+  assert.deepEqual(L.rangeWindow("2026-11-06", "Q"), { from: "2026-10-01", to: "2026-12-31", title: "ott – dic 2026" });
+  assert.equal(L.rangeWindow("2026-11-06", "Q", 4).title, "ott – dic 2025");
+  assert.deepEqual(L.rangeWindow("2026-03-31", "M", 1), { from: "2026-02-01", to: "2026-02-28", title: "Febbraio 2026" });
+  assert.equal(L.rangeWindow("2026-11-06", "Y", 1).title, "2025");
+});
+
+test("chartSeries: days sit on a time axis, empty days leave no point", () => {
+  const pts = [{ date: "2026-10-02", v: 65.7 }, { date: "2026-10-14", v: 65.45 }, { date: "2026-10-14", v: 65.55 }, { date: "2026-11-03", v: 66 }];
+  const oct = L.chartSeries(pts, "M", 1, { today: "2026-11-06" });
+  assert.equal(oct.days, 31);
+  assert.deepEqual(oct.buckets.map((b) => [b.start, b.pos, +b.v.toFixed(2), b.n]), [["2026-10-02", 1.5, 65.7, 1], ["2026-10-14", 13.5, 65.5, 2]]);
+  assert.deepEqual(oct.ticks.map((t) => t.label), ["5", "12", "19", "26"]);
+  assert.equal(oct.when, "mese scorso");
+  assert.equal(oct.hasNewer && !oct.hasOlder, true);
+  const nov = L.chartSeries(pts, "M", 0, { today: "2026-11-06" });
+  assert.equal(nov.title, "Novembre 2026");
+  assert.equal(nov.when, "questo mese");
+  const wk = L.chartSeries(pts, "W", 0, { today: "2026-11-06" });
+  assert.deepEqual(wk.ticks.map((t) => t.label), ["lun 2", "mar 3", "mer 4", "gio 5", "ven 6", "sab 7", "dom 8"]);
+  const q = L.chartSeries(pts, "Q", 0, { today: "2026-11-06", best: true });
+  assert.equal(q.step, "W");
+  assert.deepEqual(q.buckets.map((b) => b.v), [65.7, 65.55, 66]); // best of each week, not the average
+  assert.deepEqual(q.ticks.map((t) => t.label), ["ott", "nov", "dic"]);
+  const all = L.chartSeries(pts, "all", 0, { today: "2026-11-06" });
+  assert.equal(all.from, "2026-10-02");
+  assert.equal(all.hasOlder, false);
+});
+
+test("windowAgo says how far back a window is", () => {
+  assert.equal(L.windowAgo("2026-11-02", "W", "2026-11-06"), "questa settimana");
+  assert.equal(L.windowAgo("2026-10-26", "W", "2026-11-06"), "settimana scorsa");
+  assert.equal(L.windowAgo("2026-10-12", "W", "2026-11-06"), "3 settimane fa");
+  assert.equal(L.windowAgo("2026-08-01", "M", "2026-11-06"), "3 mesi fa");
+  assert.equal(L.windowAgo("2026-07-01", "Q", "2026-11-06"), "trimestre scorso");
+  assert.equal(L.windowAgo("2025-10-01", "Q", "2026-11-06"), "4 trimestri fa");
+  assert.equal(L.windowAgo("2024-01-01", "Y", "2026-11-06"), "2 anni fa");
 });
 
 test("deadline and dueText count down, then count the days overdue", () => {

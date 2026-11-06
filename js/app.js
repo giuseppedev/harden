@@ -38,7 +38,6 @@ function renderHeader() {
        <div class="row" style="gap:6px">${badge}<button class="icon-btn" data-act="session-menu" aria-label="Altro sulla sessione">⋯</button></div>`
     : `<div><h1>${esc(TITLES[ui.view] || "Harden")}</h1>${sub ? `<div class="hint">${esc(sub)}</div>` : ""}</div>
        <div class="row" style="gap:6px">${badge}${ui.view === "settings" ? "" : `<button class="icon-btn ${dotFor(d, "settings")}" data-act="go" data-view="settings" aria-label="Impostazioni">⚙︎</button>`}</div>`}</div></div>`;
-  document.body.classList.toggle("full", ui.view === "workout");
   $$(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === ui.view)));
   const m = $(".tabs [data-view=measures]");
   if (m) m.className = dotFor(d, "measures");
