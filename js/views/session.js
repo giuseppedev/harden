@@ -13,6 +13,8 @@ document.addEventListener("toggle", (e) => {
 }, true);
 
 /* ---------- Lookups ---------- */
+/** Past sessions shown under the exercise name, newest first; the row scrolls sideways. */
+const HISTORY_CHIPS = 6;
 const prevEntryFor = (d, session, exerciseId) => L.historyFor(d, exerciseId, { before: session })[0] || null;
 function lastBarFor(d, exerciseId) {
   for (const h of L.historyFor(d, exerciseId)) if (h.entry.barId) return h.entry.barId;
@@ -33,10 +35,28 @@ function supersetLabel(slot) {
 const slotOf = (s, slotId) => cycleOfSession(s).sheets[s.sheet].find((x) => x.id === slotId);
 const current = () => sessionById(ui.sessionId);
 
-/** Exercises with at least one set ticked, out of the sheet's exercises. */
-function progressOf(s) {
-  const slots = cycleOfSession(s).sheets[s.sheet] || [];
-  return { done: slots.filter((sl) => L.doneSets(s.entries?.[sl.id]).length).length, total: slots.length };
+/** Sets ticked on one exercise, out of those that count (MAV warm-ups left out, extra sets in). */
+function slotProgress(c, s, slot) {
+  const e = s.entries?.[slot.id], blocks = L.resolveSlot(c, slot, s).blocks;
+  const idx = [...L.countedIdx(blocks, s.week), ...L.extraIdx(e, blocks, s.week)];
+  return { n: idx.filter((i) => e?.sets?.[i]?.done).length, planned: idx.length };
+}
+const slotComplete = (c, s, slot) => { const p = slotProgress(c, s, slot); return p.planned > 0 && p.n === p.planned; };
+/**
+ * Progress of a session, set by set: `sets` of `setsTotal` move the bar, `done` of `total` counts the exercises with
+ * all their sets ticked. MAV warm-ups are left out, so skipping one never holds the bar back; extra sets count.
+ * Exercises with no sets this week are left out.
+ */
+export function progressOf(s) {
+  const c = cycleOfSession(s);
+  let sets = 0, setsTotal = 0, done = 0, total = 0;
+  for (const slot of c.sheets[s.sheet] || []) {
+    const { n, planned } = slotProgress(c, s, slot);
+    if (!planned) continue;
+    sets += n; setsTotal += planned; total++;
+    if (n === planned) done++;
+  }
+  return { done, total, sets, setsTotal, ratio: setsTotal ? sets / setsTotal : 0 };
 }
 /**
  * Workout span { start, end } in ms, from "Inizia" (the session's creation) to "Termina". Guards for sessions not
@@ -87,7 +107,7 @@ export function viewWorkout(d) {
   return `
   <section class="card sess-card"><div class="row"><div class="hint">Settimana ${s.week} · ${esc(L.fmtDate(s.date))}${startedAt(s) ? ` · inizio ${startedAt(s)}` : ""} · <span id="sessProg">${p.done} di ${p.total}</span> esercizi${c.closed ? ` · ciclo ${c.number} chiuso` : ""}</div>
     ${s.finishedAt ? `<button class="mini" data-act="workout-back">Fatto</button>` : ""}</div>
-    <div class="progress"><i id="sessBar" style="width:${p.total ? (p.done / p.total) * 100 : 0}%"></i></div></section>
+    <div class="progress ${s.finishedAt ? "" : "live"}"><i id="sessBar" style="width:${p.ratio * 100}%"></i></div></section>
   ${slots.map((slot) => exerciseCard(d, c, s, slot)).join("")}
   ${s.finishedAt ? "" : `<button class="btn" data-act="finish">Termina sessione</button>`}`;
 }
@@ -100,9 +120,9 @@ function exerciseCard(d, c, s, slot) {
   const prev = prevEntryFor(d, s, r.exerciseId);
   const prevRaw = prev?.entry.sets || [];
   const prevLast = prevRaw.filter(Boolean).pop();
-  const hist = L.historyFor(d, r.exerciseId, { before: s }).slice(0, 2);
+  const hist = L.historyFor(d, r.exerciseId, { before: s }).slice(0, HISTORY_CHIPS);
   const chips = hist.length
-    ? hist.map((h) => { const v = ex.variants?.length ? L.variantOf(d, h.entry) : ""; return `<span><b>${h.cycle.id === c.id ? "" : `C${h.cycle.number} `}S${h.session.week}${h.session.sheet !== s.sheet ? ` ${esc(h.session.sheet)}` : ""}${v ? ` · ${esc(v)}` : ""}:</b> ${L.countedSets(h).map(L.fmtSet).join(", ")}</span>`; }).join("")
+    ? hist.map((h) => { const v = ex.variants?.length ? L.variantOf(d, h.entry) : ""; return `<span><b>C${h.cycle.number} S${h.session.week}${h.session.sheet !== s.sheet ? ` scheda ${esc(h.session.sheet)}` : ""}${v ? ` · ${esc(v)}` : ""}:</b> ${L.countedSets(h).map(L.fmtSet).join(", ")}</span>`; }).join("")
     : `<span>Mai fatto prima</span>`;
   const prK = prIndex(d, s, slot);
   let k = 0;
@@ -135,7 +155,7 @@ function exerciseCard(d, c, s, slot) {
   const prevNote = !entry?.note && prev?.entry.note ? prev.entry.note : "";
   const coach = !r.substitution && coachNotes(slot);
   const sub = r.substitution ? `<div class="subtag">⇄ Sostituisce ${esc(L.exName(d, slot.exerciseId))} · ${r.substitution === "permanent" ? "definitiva" : "solo oggi"}<button data-act="restore" data-slot="${slot.id}">Ripristina</button></div>` : "";
-  return `<article class="card" data-card="${slot.id}">
+  return `<article class="card ${slotComplete(c, s, slot) ? "complete" : ""}" data-card="${slot.id}">
     <div class="ex-head"><span class="dist">${esc(ex.district || slot.district || "")}</span>
       <div class="ex-title"><h3>${esc(ex.name)}</h3><div class="meta"><span>${esc(L.schemaLabel(r.blocks, s.week))}</span><span>Recupero ${esc(L.fmtRest(slot.rest))}</span>${supersetLabel(slot)}</div>
         <button class="setup-line ${ex.setup ? "" : "empty"}" data-act="setup-edit" data-ex="${r.exerciseId}">⚙︎ ${ex.setup ? esc(ex.setup) : "Regolazioni"}</button></div>
@@ -158,7 +178,7 @@ function setRow(slotId, i, target, role, saved, reps, load, pr) {
     <span class="n">${pr ? '<b class="pr-tag">PR</b>' : i + 1}</span><span class="tgt ${role}">${esc(target)}</span>
     <label class="field"><input data-f="reps" inputmode="numeric" value="${esc(reps)}" placeholder="–" aria-label="Ripetizioni serie ${i + 1}"><em>rip</em></label>
     <label class="field"><input data-f="load" inputmode="decimal" value="${esc(L.fmtNum(load))}" placeholder="–" aria-label="Carico serie ${i + 1}"><em>kg</em></label>
-    <button class="check" data-act="check" ${role === "mav" ? 'data-mav="1"' : ""} ${role === "warm" ? 'data-warm="1"' : ""} aria-label="Serie ${i + 1} fatta" aria-pressed="${!!saved?.done}">✓</button></div>`;
+    <button class="check" data-act="check" aria-label="Serie ${i + 1} fatta" aria-pressed="${!!saved?.done}">✓</button></div>`;
 }
 
 /* ---------- Writing sets ---------- */
@@ -190,7 +210,7 @@ export function onSetInput(row) {
 function refreshProgress() {
   const s = current(), p = progressOf(s);
   if ($("#sessProg")) $("#sessProg").textContent = `${p.done} di ${p.total}`;
-  if ($("#sessBar")) $("#sessBar").style.width = `${p.total ? (p.done / p.total) * 100 : 0}%`;
+  if ($("#sessBar")) $("#sessBar").style.width = `${p.ratio * 100}%`;
 }
 
 /**
@@ -227,8 +247,12 @@ function onCheck(btn) {
   withEntry(slotId, (e) => { e.sets[k] = { ...values, done, ...(done ? { at: store.now() } : {}) }; });
   row.classList.toggle("done", done);
   btn.setAttribute("aria-pressed", String(done));
+  if (done) flash(btn, "pop");
   renderHeader(); refreshProgress();
   const slot = slotOf(s, slotId);
+  const card = row.closest(".card"), complete = slotComplete(cycleOfSession(s), current(), slot);
+  if (complete && !card.classList.contains("complete")) flash(card, "just-done");
+  card.classList.toggle("complete", complete);
   const r = L.resolveSlot(cycleOfSession(s), slot, current());
   const prNow = prIndex(D(), current(), slot);
   paintPR(slotId, prNow);
@@ -236,14 +260,12 @@ function onCheck(btn) {
   // Announce the record once per exercise, when the first set beats it; later heavier sets just move the mark.
   if (prNow === k && prBefore < 0) { const pr = slotRecord(D(), current(), slot); toast(`Nuovo record su ${L.exName(D(), r.exerciseId)}: ${L.recordText(pr.set, pr.rec)}`, { ms: 3500 }); }
   startTimer(slot.rest, L.exName(D(), r.exerciseId));
-  if (btn.dataset.mav && values.load != null) {
-    const next = row.closest(".block").nextElementSibling;
-    if (next?.classList.contains("block")) {
-      $$(".set:not(.done) [data-f=load]", next).forEach((inp) => { inp.value = L.fmtNum(values.load); onSetInput(inp.closest(".set")); });
-      toast(`Serie di lavoro precompilate con il carico MAV: ${L.fmtNum(values.load)} kg`);
-      updateBarTotal(slotId);
-    }
-  }
+}
+
+/** Play a one-off animation class on an element (or its children) and take it off once the animation is over. */
+function flash(el, cls, ms = 600) {
+  el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+  setTimeout(() => el.classList.remove(cls), ms);
 }
 
 /* ---------- Bars and plates ---------- */

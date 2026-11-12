@@ -132,15 +132,16 @@ function stampFooter(doc, font) {
 
 /* ---------- Report ---------- */
 /** Measures sheet for the coach: the latest circumferences with their date and the weights of the last 7 days. */
-export async function measuresPdf(d) {
+/** Measures sheet as of `date`: the latest circumferences up to that day and the weights of the 7 days ending there. */
+export async function measuresPdf(d, date = todayISO()) {
   const { PDFDocument, StandardFonts, rgb } = await lib();
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const black = rgb(0.08, 0.08, 0.1), mid = rgb(0.4, 0.42, 0.46), line = rgb(0.82, 0.84, 0.87), accent = rgb(0.12, 0.31, 0.82);
-  const ms = live(d.measurements).sort((a, b) => (a.date > b.date ? 1 : -1));
-  const from = addDays(todayISO(), -6);
-  const ws = live(d.weights).filter((w) => w.date >= from && w.date <= todayISO()).sort((a, b) => (a.date > b.date ? 1 : -1));
+  const ms = live(d.measurements).filter((m) => m.date <= date).sort((a, b) => (a.date > b.date ? 1 : -1));
+  const from = addDays(date, -6);
+  const ws = live(d.weights).filter((w) => w.date >= from && w.date <= date).sort((a, b) => (a.date > b.date ? 1 : -1));
   const W = 300; // narrow table, left aligned
   const page = doc.addPage(A4);
   let y = A4[1] - M;
@@ -162,7 +163,8 @@ export async function measuresPdf(d) {
 
   text("Misure e peso", M, 20, bold);
   y -= 16;
-  text(`${d.profile?.athlete || ""} · generato il ${fmtDate(todayISO(), { weekday: false, year: true })}`, M, 9, font, mid);
+  const asOf = date === todayISO() ? "" : `al ${fmtDate(date, { weekday: false, year: true })} · `;
+  text(`${d.profile?.athlete || ""} · ${asOf}generato il ${fmtDate(todayISO(), { weekday: false, year: true })}`, M, 9, font, mid);
 
   heading("Circonferenze");
   if (!ms.length) note("Nessuna misurazione registrata.");
@@ -172,8 +174,8 @@ export async function measuresPdf(d) {
     table(["Misura", "cm"], MEASURES.map((m) => [m.name, fmtNum(cur.values[m.k]) || "-"]));
   }
 
-  heading("Peso · ultimi 7 giorni");
-  note(`${fmtDate(from, { weekday: false })} – ${fmtDate(todayISO(), { weekday: false, year: true })}`);
+  heading("Peso · 7 giorni");
+  note(`${fmtDate(from, { weekday: false })} – ${fmtDate(date, { weekday: false, year: true })}`);
   if (!ws.length) note("Nessuna pesata in questi giorni.");
   else {
     table(["Data", "kg"], ws.map((w) => [fmtDate(w.date, { year: true }), w.kg.toFixed(2).replace(".", ",") + (w.scale === "other" ? " *" : "")]));

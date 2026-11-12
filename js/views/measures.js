@@ -23,7 +23,7 @@ export function viewMeasures(d) {
     <button role="tab" data-act="mtab" data-tab="weight" aria-selected="${ui.mTab === "weight"}">Peso</button>
     <button role="tab" data-act="mtab" data-tab="circ" aria-selected="${ui.mTab === "circ"}">Circonferenze</button></div>`;
   const rem = remindersFor(d, "measures").find((r) => r.key === ui.mTab);
-  return exportCard("Misure e peso", "Ultime circonferenze e peso a 7 giorni", "export-measures") + tabs + (ui.mTab === "weight" ? weightTab(ws, rem) : circTab(ms, rem));
+  return exportCard("Misure e peso", "Circonferenze e peso dei 7 giorni, al giorno che scegli", "export-measures") + tabs + (ui.mTab === "weight" ? weightTab(ws, rem) : circTab(ms, rem));
 }
 
 function weightTab(ws, rem) {
@@ -166,7 +166,19 @@ Object.assign(actions, {
     closeModal(); render(); toast(editId ? "Misurazione aggiornata" : "Misure salvate");
     runSync(`feat: log measurements (${date})`, { quiet: true });
   },
-  "export-measures": (el) => runExport(el, async (pdf) => ({ bytes: await pdf.measuresPdf(D()), name: `Misure e peso - ${L.todayISO()}.pdf` })),
+  "export-measures": () => {
+    const today = L.todayISO();
+    openModal(`<h2>Esporta misure e peso</h2>
+      <label class="label" for="xDate">Giorno<input id="xDate" type="date" value="${today}" max="${today}"></label>
+      <p class="hint">Nel PDF: le circonferenze più recenti fino a quel giorno e le pesate dei 7 giorni che finiscono lì.</p>
+      <button class="btn" data-act="export-measures-go">Esporta PDF</button>
+      <button class="btn ghost" data-act="close">Annulla</button>`);
+  },
+  "export-measures-go": async (el) => {
+    const date = $("#xDate").value || L.todayISO();
+    await runExport(el, async (pdf) => ({ bytes: await pdf.measuresPdf(D(), date), name: `Misure e peso - ${date}.pdf` }));
+    closeModal();
+  },
 });
 
 Object.assign(confirmed, {

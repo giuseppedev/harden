@@ -3,7 +3,7 @@ import * as store from "../data.js";
 import * as L from "../logic.js";
 import { esc, D, ui, actions, go, byDate } from "../core.js";
 import { sparkline } from "../charts.js";
-import { sessionRow, sessionMinutes, fmtMinutes, startSession, openSessionView } from "./session.js";
+import { sessionRow, sessionMinutes, fmtMinutes, startSession, openSessionView, progressOf } from "./session.js";
 import { openWeightForm, openMeasureForm } from "./measures.js";
 import { reminders } from "../reminders.js";
 
@@ -31,7 +31,7 @@ export function viewDashboard(d) {
   return [
     chips && `<div class="rchips">${chips}</div>`,
     nowCard(d, c, letters),
-    kpis(d, c, letters, done),
+    kpis(d, c, letters),
     records(d),
     done.length && `<section class="card stack"><div class="row"><div class="label">Ultime sessioni</div><button class="mini" data-act="all-sessions">Tutte ›</button></div>
       <ul class="list">${done.slice(-2).reverse().map((s) => sessionRow(s)).join("")}</ul></section>`,
@@ -42,11 +42,9 @@ export function viewDashboard(d) {
 function nowCard(d, c, letters) {
   const open = L.openSession(d);
   if (open) {
-    const oc = d.cycles.find((x) => x.id === open.cycleId);
-    const slots = oc.sheets[open.sheet] || [];
-    const n = slots.filter((sl) => L.doneSets(open.entries?.[sl.id]).length).length;
+    const p = progressOf(open);
     return `<section class="card next stack"><div class="label">In corso · settimana ${open.week}</div>
-      <div class="row"><div><div class="big">${esc(open.sheet)}</div><div class="hint" style="font-size:14px">${esc(L.fmtDate(open.date))} · ${n} di ${slots.length} esercizi</div></div>
+      <div class="row"><div><div class="big">${esc(open.sheet)}</div><div class="hint" style="font-size:14px">${esc(L.fmtDate(open.date))} · ${p.done} di ${p.total} esercizi</div></div>
       <button class="btn" data-act="open-session" data-id="${open.id}">Riprendi</button></div></section>`;
   }
   if (c.closed) return `<section class="card stack"><div class="label">Ciclo ${c.number} chiuso</div><p class="hint" style="font-size:14px">Importa la scheda nuova del coach per iniziare il prossimo ciclo.</p><label class="btn" for="programFileHome">Importa la scheda nuova</label><input id="programFileHome" type="file" accept=".json,application/json" data-act="import-program-file" class="vh"></section>`;
@@ -63,19 +61,22 @@ function nowCard(d, c, letters) {
     }).join("")}</div></section>`;
 }
 
-function kpis(d, c, letters, done) {
+function kpis(d, c, letters) {
   const w = Math.min(Math.max(1, L.weekForDate(c, L.todayISO())), c.weeks);
-  const inWeek = letters.filter((l) => L.doneInWeek(d, c, l, w));
-  const planned = L.plannedSessions(d, c);
-  const adherence = planned ? Math.round((Math.min(done.length, planned) / planned) * 100) : null;
+  // The session in progress fills its own segment set by set, instead of counting as done.
+  const open = L.openSession(d);
+  const live = open?.cycleId === c.id && open.week === w ? open : null;
+  const inWeek = letters.filter((l) => L.sessionsOf(d, c.id).some((s) => s.sheet === l && s.week === w && s !== live && (s.finishedAt || L.sessionHasWork(s))));
+  const liveSheet = live && !inWeek.includes(live.sheet) ? live.sheet : null;
   const ws = store.live(d.weights).sort(byDate);
   const last = ws[ws.length - 1];
   const ref = last && ws.filter((x) => x.date <= L.addDays(last.date, -7)).pop();
   const recent = last ? ws.filter((x) => x.date > L.addDays(last.date, -30)) : [];
   return `<div class="kpis">
-    <div class="kpi"><div class="label">Settimana ${w}</div><b>${inWeek.length}<small>/${letters.length}</small></b>
-      <div class="segs">${letters.map((l) => `<i class="${inWeek.includes(l) ? "on" : ""}"></i>`).join("")}</div><span class="hint">sessioni fatte</span></div>
-    <div class="kpi"><div class="label">Aderenza ciclo</div><b>${adherence != null ? `${adherence}<small>%</small>` : "–"}</b><span class="hint">${planned ? `${Math.min(done.length, planned)} di ${planned} previste` : "dalla settimana 2"}</span></div>
+    <div class="kpi wide"><div class="row"><div class="label">Settimana ${w}</div><span class="hint">sessioni fatte</span></div>
+      <div class="row"><b>${inWeek.length}<small>/${letters.length}</small></b><div class="segs">${letters.map((l) => l === liveSheet
+        ? `<i class="live" style="--p:${Math.round(progressOf(live).ratio * 100)}%"></i>`
+        : `<i class="${inWeek.includes(l) ? "on" : ""}"></i>`).join("")}</div></div></div>
     <button class="kpi wide" data-act="go-weight-tab">${last ? `<div class="row"><div class="label">Peso</div><span class="hint">${esc(L.fmtDate(last.date))}</span></div>
       <div class="row"><b>${L.fmtKg(last.kg)}<small> kg</small></b>${ref ? `<span><span class="delta">${L.fmtDelta(last.kg, ref.kg, 2)}</span> <span class="hint">in 7 gg</span></span>` : ""}</div>${sparkline(recent.map((x) => x.kg))}`
       : `<div class="label">Peso</div><span class="hint">Nessuna pesata. Tocca per registrarla.</span>`}</button>

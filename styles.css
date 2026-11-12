@@ -119,13 +119,17 @@ details p b { color: var(--fg); }
 .timer .info { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); }
 .timer .info div:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .timer .bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 4px; overflow: hidden; }
-.timer .bar i { display: block; height: 100%; background: var(--rest); width: 0; }
-.timer.over { background: var(--done-soft); }
+.timer .bar i { display: block; height: 100%; background: var(--rest); width: 0; transition: width .25s linear; }
+.timer.over { background: var(--done-soft); animation: rest-over .5s ease-out 2; }
+@keyframes rest-over { 50% { background: color-mix(in srgb, var(--done) 30%, var(--surface)); } }
 .timer.over .t { color: var(--done); }
 .timer button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 8px; font-size: 14px; }
 .tabs { display: grid; grid-template-columns: repeat(5, 1fr); }
 .tabs button { border: 0; background: none; padding: 12px 0; font-weight: 600; color: var(--muted); font-size: 14px; }
-.tabs button[aria-selected="true"] { color: var(--accent); box-shadow: inset 0 2px 0 var(--accent); }
+.tabs button[aria-selected="true"] { color: var(--accent); }
+.tabs { position: relative; --tab: 0; }
+.tabs::before { content: ""; position: absolute; top: 0; left: calc(var(--tab) * 20% + 10% - 16px); width: 32px; height: 3px; border-radius: 0 0 3px 3px; background: var(--accent); transition: left .35s cubic-bezier(.3, .8, .25, 1), opacity .2s; }
+.tabs.none::before { opacity: 0; }
 
 /* Logbook preview */
 .sheet-wrap { overflow-x: auto; background: #fff; color: #111; border-radius: 8px; padding: 10px; border: 1px solid var(--line); }
@@ -205,7 +209,7 @@ details p b { color: var(--fg); }
 .cat-row { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding-block: 8px; border-bottom: 1px solid var(--line); }
 .cat-row:last-child { border-bottom: 0; }
 .cat-row span { min-width: 0; }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 .vh { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 .tagline { font-size: 12px; color: var(--muted); font-style: italic; letter-spacing: .01em; }
 /* Trend chart and measurement history */
@@ -313,8 +317,13 @@ details p b { color: var(--fg); }
 .kpi b small { font-size: 14px; color: var(--muted); }
 .kpi .delta { font-size: 14px; }
 .segs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; }
+.kpi .row .segs { flex: 1; margin-left: 8px; }
 .segs i { height: 8px; border-radius: 4px; background: var(--line); }
 .segs i.on { background: var(--accent); }
+/* Session in progress: the segment fills with the sets done; the sequential signal below runs across the fill. */
+.segs i.live { position: relative; overflow: hidden; }
+.segs i.live::before, .segs i.live::after { content: ""; position: absolute; inset: 0 auto 0 0; width: max(8px, var(--p)); border-radius: 4px; }
+.segs i.live::before { background: var(--accent); }
 .spark { width: 100%; height: 34px; display: block; }
 .spark path { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .spark .a { fill: var(--accent-soft); stroke: none; }
@@ -322,7 +331,17 @@ details p b { color: var(--fg); }
 .swap-tag { color: var(--swap); }
 .sess-card { display: flex; flex-direction: column; gap: 8px; }
 .progress { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
-.progress i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+.progress i { display: block; height: 100%; background: var(--accent); transition: width .4s ease-out; }
+/* Session in progress: a lighter band fills the bar in steps from left to right and starts over, like sequential turn signals. */
+.progress.live i { position: relative; }
+.progress.live i::after, .segs i.live::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: color-mix(in srgb, var(--accent) 40%, white); animation: seq-signal 1.6s infinite; }
+@keyframes seq-signal {
+  0% { clip-path: inset(0 100% 0 0); opacity: 1; animation-timing-function: steps(8, end); }
+  60% { clip-path: inset(0 0 0 0); opacity: 1; }
+  80% { clip-path: inset(0 0 0 0); opacity: 1; }
+  100% { clip-path: inset(0 0 0 0); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .progress.live i::after, .segs i.live::after { animation: none; display: none; } }
 .mini.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .setup-line { display: inline-block; max-width: 100%; margin-top: 6px; border: 0; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 600; text-align: left; color: var(--accent); background: var(--accent-soft); }
 .setup-line.empty { background: transparent; color: var(--muted); padding-left: 0; font-weight: 500; }
@@ -388,3 +407,24 @@ details.coach .notes { padding-bottom: 4px; }
 .resume { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-height: 48px; border: 0; border-bottom: 1px solid var(--line); background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 16px; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); text-align: left; }
 .resume .hint { color: var(--accent); font-weight: 500; }
 body.has-resume { padding-bottom: calc(200px + env(safe-area-inset-bottom, 0px)); }
+
+/* ---------- Touch feedback: every tap answers with a small, quick movement ---------- */
+.btn, .pick, .kpi, .mtile, .check, .icon-btn, .mini, .rchip, .menu-item, .seg button, .subtabs button { transition: transform .12s ease-out; }
+.btn:active, .pick:active, .kpi:active, .mtile:active, .icon-btn:active, .mini:active, .rchip:active, .seg button:active, .subtabs button:active { transform: scale(.97); }
+.check:active { transform: scale(.92); }
+.check.pop { animation: check-pop .32s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes check-pop { 0% { transform: scale(.8); } 100% { transform: scale(1); } }
+.set input { transition: background-color .25s, border-color .25s; }
+/* Exercise done: its district badge turns into a green tick and the card border follows. */
+.card.complete { border-color: color-mix(in srgb, var(--done) 45%, var(--line)); transition: border-color .3s; }
+.card.complete .ex-head .dist { position: relative; background: var(--done); color: transparent; }
+.card.complete .ex-head .dist::after { content: "✓"; position: absolute; inset: 0; display: grid; place-items: center; color: #fff; }
+.card.just-done .ex-head .dist { animation: done-pop .45s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes done-pop { 0% { transform: scale(.6); } 100% { transform: scale(1); } }
+/* Sheets slide up when they open; toasts rise into place. */
+.overlay.enter { animation: fade-in .2s ease-out; }
+.overlay.enter .modal { animation: sheet-up .3s cubic-bezier(.2, .8, .2, 1); }
+@keyframes fade-in { from { background: rgb(0 0 0 / 0); } }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+.toast { animation: toast-in .25s cubic-bezier(.2, .8, .2, 1); }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 10px); } }

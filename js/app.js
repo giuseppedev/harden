@@ -39,6 +39,10 @@ function renderHeader() {
     : `<div><h1>${esc(TITLES[ui.view] || "Harden")}</h1>${sub ? `<div class="hint">${esc(sub)}</div>` : ""}</div>
        <div class="row" style="gap:6px">${badge}${ui.view === "settings" ? "" : `<button class="icon-btn ${dotFor(d, "settings")}" data-act="go" data-view="settings" aria-label="Impostazioni">⚙︎</button>`}</div>`}</div></div>`;
   $$(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.view === ui.view)));
+  // The indicator slides to the selected tab; during a workout no tab is selected and it fades out where it was.
+  const tabIdx = $$(".tabs button").findIndex((b) => b.dataset.view === ui.view), tabs = $(".tabs");
+  if (tabIdx >= 0) tabs.style.setProperty("--tab", String(tabIdx));
+  tabs.classList.toggle("none", tabIdx < 0);
   const m = $(".tabs [data-view=measures]");
   if (m) m.className = dotFor(d, "measures");
   renderResumeBar(d);
@@ -174,6 +178,7 @@ store.onChange((ev) => {
 
 const syncIfNeeded = () => { if (gh.isConfigured() && navigator.onLine) runSync("chore: sync pending changes", { quiet: true }); };
 window.addEventListener("pagehide", flushTyping);
+document.addEventListener("touchstart", () => {}, { passive: true }); // lets iOS Safari show :active press states
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") { flushTyping(); if (store.isDirty()) syncIfNeeded(); return; }
   drawTimer();

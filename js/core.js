@@ -5,7 +5,7 @@ import * as gh from "./github.js";
 import * as L from "./logic.js";
 import * as pdf from "./pdf.js";
 
-export const APP_VERSION = "2.5.3";
+export const APP_VERSION = "2.6.0";
 export const TAGLINE = "every set, on record.";
 export const $ = (s, root = document) => root.querySelector(s);
 export const $$ = (s, root = document) => [...root.querySelectorAll(s)];
@@ -87,7 +87,8 @@ export function deleteWithUndo(collection, id, msg, commitMessage) {
 
 export function openModal(html) {
   const host = $("#modalHost");
-  host.innerHTML = `<div class="overlay" data-overlay><div class="modal" role="dialog" aria-modal="true"><div class="modal-inner stack">${html}</div></div></div>`;
+  const enter = host.firstElementChild ? "" : " enter"; // slide up only when a sheet opens, not when it redraws
+  host.innerHTML = `<div class="overlay${enter}" data-overlay><div class="modal" role="dialog" aria-modal="true"><div class="modal-inner stack">${html}</div></div></div>`;
   return host.firstElementChild;
 }
 /** Closing a sheet that changed data behind it (program editor, catalog, equipment) re-renders the page. */
