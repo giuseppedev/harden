@@ -4,6 +4,7 @@ import * as store from "../data.js";
 import * as L from "../logic.js";
 import { $, esc, D, ui, actions, confirmed, changes, toast, openModal, closeModal, render, go, cycle, runSync } from "../core.js";
 import { sessionRow, startSession, coachNotes } from "./session.js";
+import { importDraftCard } from "./import.js";
 
 const currentWeek = (c) => Math.min(Math.max(1, L.weekForDate(c, L.todayISO())), c.weeks);
 function pickSheet(c) {
@@ -12,7 +13,7 @@ function pickSheet(c) {
   return letters;
 }
 
-const fileInput = `<input id="programFile" type="file" accept=".json,application/json" data-act="import-program-file" class="vh">`;
+const fileInput = `<input id="programFile" type="file" accept=".pdf,application/pdf,.json,application/json" data-act="import-program-file" class="vh">`;
 
 /** Cycle bar: the cycle shown (a picker when there are several) and a ⋯ menu for cycle-level actions. */
 function cycleBar(d, c) {
@@ -25,12 +26,12 @@ function cycleBar(d, c) {
 
 export function viewProgram(d) {
   const c = cycle();
-  if (!c) return `<section class="card stack"><h2>Nessuna scheda</h2><p class="hint" style="font-size:14px">Importa il file della scheda del coach per iniziare il primo ciclo.</p>
+  if (!c) return `${importDraftCard()}<section class="card stack"><h2>Nessuna scheda</h2><p class="hint" style="font-size:14px">Scegli il PDF della scheda del coach per iniziare il primo ciclo.</p>
     <label class="btn" for="programFile">Importa la scheda del coach</label>${fileInput}</section>`;
   const tabs = `<div class="subtabs" role="tablist">
     <button role="tab" data-act="ptab" data-tab="program" aria-selected="${ui.progTab === "program"}">Programma</button>
     <button role="tab" data-act="ptab" data-tab="sessions" aria-selected="${ui.progTab === "sessions"}">Sessioni</button></div>`;
-  return cycleBar(d, c) + tabs + (ui.progTab === "sessions" ? sessionsTab(d, c) : programTab(d, c));
+  return importDraftCard() + cycleBar(d, c) + tabs + (ui.progTab === "sessions" ? sessionsTab(d, c) : programTab(d, c));
 }
 
 function programTab(d, c) {
@@ -158,33 +159,6 @@ export function readJsonFile(input) {
   });
 }
 
-/** Program file from the coach PDF: creates a new cycle and closes the running one. */
-function importProgram(p, startDate) {
-  if (p.type !== "gymlog-program" || !p.sheets) throw new Error("Questo file non è una scheda di Harden.");
-  const start = startDate || p.startDate;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(start || "")) throw new Error("Scegli la data di inizio del ciclo.");
-  const weeks = p.weeks || 4;
-  for (const [letter, list] of Object.entries(p.sheets)) {
-    if (!/^[A-Z0-9]{1,3}$/.test(letter) || !Array.isArray(list) || !list.length) throw new Error(`Scheda "${letter}" non valida nel file.`);
-    for (const x of list) if (!x.name || !Array.isArray(x.blocks) || !x.blocks.length) throw new Error(`Esercizio senza nome o senza serie nella scheda ${letter}.`);
-  }
-  store.mutate((d) => {
-    const byName = new Map(store.live(d.exercises).map((e) => [L.norm(e.name), e]));
-    const number = Math.max(0, ...store.live(d.cycles).map((c) => c.number)) + 1;
-    const sheets = {};
-    for (const [letter, list] of Object.entries(p.sheets)) {
-      sheets[letter] = list.map((x, i) => {
-        let ex = byName.get(L.norm(x.name));
-        if (!ex) { ex = store.upsert(d, "exercises", { id: store.uid(), name: x.name, district: x.district, usesBar: !!x.usesBar }); byName.set(L.norm(x.name), ex); }
-        return { id: `${letter}${i + 1}`, exerciseId: ex.id, district: x.district, rest: x.rest, superset: x.superset || null, tut: x.tut || "", video: x.video || "", description: x.description || "", exerciseNote: x.exerciseNote || "", progressionNote: x.progressionNote || "", week4Plus: !!x.week4Plus, blocks: x.blocks };
-      });
-    }
-    store.upsert(d, "cycles", { id: store.uid(), number, startDate: start, weeks, dayPlan: p.dayPlan || {}, closed: false, overrides: {}, sheets });
-    // The running cycle closes when the new one starts: today if it starts today, otherwise on that day.
-    L.closeSupersededCycles(d, store.now());
-  });
-}
-
 /* ================= Handlers ================= */
 Object.assign(actions, {
   ptab: (el) => { ui.progTab = el.dataset.tab; render(); },
@@ -248,18 +222,5 @@ Object.assign(confirmed, {
 
 Object.assign(changes, {
   cycle: (t) => { ui.cycleId = t.value; ui.week = null; render(); },
-  "import-program-file": async (t) => {
-    try {
-      const p = await readJsonFile(t);
-      openModal(`<h2>Nuova scheda</h2><p class="hint" style="font-size:14px">Il ciclo in corso continua fino alla data di inizio della scheda nuova, poi si chiude da solo.</p>
-        <label class="label" for="progStart">Data di inizio<input id="progStart" type="date" value="${esc(p.startDate || L.todayISO())}"></label>
-        <div class="row"><button class="btn ghost" data-act="close">Annulla</button><button class="btn" id="progOk">Importa</button></div>`);
-      $("#progOk").onclick = () => {
-        try { importProgram(p, $("#progStart").value); closeModal(); ui.cycleId = null; ui.week = null; go("program"); toast("Nuova scheda importata"); runSync("feat: import new cycle program", { quiet: true }); }
-        catch (err) { toast(err.message, { error: true }); }
-      };
-    } catch (err) { toast(err.message, { error: true }); }
-    t.value = "";
-  },
 });
 

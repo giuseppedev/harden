@@ -45,6 +45,24 @@ export const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replac
 export const slug = (s) => norm(s).replace(/ /g, "-");
 
 /* ---------- Catalog ---------- */
+const letterPairs = (s) => { const t = s.replace(/ /g, ""), out = []; for (let i = 0; i < t.length - 1; i++) out.push(t.slice(i, i + 2)); return out; };
+/** How alike two exercise names are, 0..1: 1 only for the same normalised name, else the better of shared letter pairs and shared words. */
+export function similarity(a, b) {
+  a = norm(a); b = norm(b);
+  if (a === b) return 1;
+  const pa = letterPairs(a), left = letterPairs(b), total = pa.length + left.length;
+  let hit = 0;
+  for (const p of pa) { const i = left.indexOf(p); if (i >= 0) { hit++; left.splice(i, 1); } }
+  const wa = new Set(a.split(" ")), wb = new Set(b.split(" "));
+  const words = [...wa].filter((w) => wb.has(w)).length / Math.max(wa.size, wb.size);
+  return Math.max(total ? (2 * hit) / total : 0, words) * 0.98;
+}
+/** Catalog exercises for a coach name: "ok" (same name), "sim" (up to 3 similar, best first) or "new". */
+export function catalogMatches(exercises, name) {
+  const cands = live(exercises).map((ex) => ({ ex, score: similarity(name, ex.name) })).filter((c) => c.score >= 0.5)
+    .sort((x, y) => y.score - x.score).slice(0, 3);
+  return { kind: !cands.length ? "new" : cands[0].score === 1 ? "ok" : "sim", cands };
+}
 export const exerciseOf = (d, id) => d.exercises.find((e) => e.id === id);
 export const exName = (d, id) => exerciseOf(d, id)?.name || "Esercizio rimosso";
 export const barOf = (d, id) => d.bars.find((b) => b.id === id);
@@ -83,7 +101,8 @@ export function freezeSubstitutionSchemas(d, now) {
   return changed;
 }
 export const sheetLetters = (c) => Object.keys(c?.sheets || {});
-export const cycleEnd = (c) => addDays(c.startDate, c.weeks * 7 - 1);
+/** Last day of a cycle: its planned weeks, or the day it was closed early when a new program started sooner. */
+export const cycleEnd = (c) => c.endDate || addDays(c.startDate, c.weeks * 7 - 1);
 export function weekForDate(c, date) {
   const w = Math.floor(daysBetween(c.startDate, date) / 7) + 1;
   return Math.min(Math.max(w, 1), c.weeks);
@@ -283,7 +302,7 @@ export const DISTRICT_NAMES = { P: "Petto", T: "Trazioni / dorso", D: "Dorsali",
 /* ---------- Report ---------- */
 export function plannedSessions(d, c) {
   const L = sheetLetters(c).length;
-  if (c.closed) return c.weeks * L;
+  if (c.closed) return Math.min(weekForDate(c, cycleEnd(c)), c.weeks) * L;
   const done = sessionsOf(d, c.id).filter(sessionHasWork).length;
   const w = Math.min(weekForDate(c, todayISO()), c.weeks);
   return Math.max(done, (w - 1) * L);

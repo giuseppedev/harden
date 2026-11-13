@@ -16,7 +16,7 @@ Funziona offline. I dati restano sul telefono e vengono sincronizzati in un file
 | **Report** | Confronto tra i cicli scelti: progressione dei carichi, volume per distretto, peso e circonferenze a inizio e fine. |
 | **⚙︎ Impostazioni** | Sincronizzazione, atleta e attrezzatura (bilancieri, dischi), catalogo esercizi, pagamento coaching, backup. |
 
-La **sessione** si apre con le sezioni sempre visibili in basso, così puoi passare a Misure o Report e tornare con "Riprendi la sessione". In alto ci sono settimana, data e avanzamento (la barra avanza a ogni serie spuntata, avvicinamenti del MAV esclusi; un esercizio conta come fatto quando tutte le sue serie sono spuntate, e allora il suo badge diventa una spunta verde), poi una card per esercizio con regolazioni, note del coach e video (da aprire), storico delle ultime 6 volte con ciclo e settimana (scorre di lato), serie, serie extra e nota. Le azioni meno frequenti (sostituisci, storico e progressione) stanno nel menu ⋯ della card. Il recupero parte da solo quando spunti una serie; "Termina sessione" è in fondo, dopo l'ultimo esercizio. Cambiare data o settimana ed eliminare la sessione si fa dal menu ⋯ in alto.
+La **sessione** si apre con le sezioni sempre visibili in basso, così puoi passare a Misure o Report e tornare con "Riprendi la sessione". In alto ci sono settimana, data e avanzamento (la barra avanza a ogni serie spuntata, avvicinamenti del MAV esclusi; un esercizio conta come fatto quando tutte le sue serie sono spuntate, e allora il suo badge diventa una spunta verde), poi una card per esercizio con regolazioni, note del coach e video (da aprire), storico delle ultime 6 volte con ciclo e settimana (scorre di lato), serie, serie extra e nota. Le azioni meno frequenti (sostituisci, storico e progressione) stanno nel menu ⋯ della card. Il recupero parte da solo quando spunti una serie; "Termina sessione" è in fondo, dopo l'ultimo esercizio; finché non hai spuntato nessuna serie al suo posto c'è "Annulla sessione", per una sessione aperta per sbaglio. Modificare una sessione già terminata non cambia la sua durata. Cambiare data o settimana ed eliminare la sessione si fa dal menu ⋯ in alto.
 
 Con una sessione in corso, in Scheda, Misure, Logbook e Report compare sopra i tab la barra **Riprendi la sessione**, che riporta all'allenamento nel punto in cui eri. In Home c'è già la card della sessione in corso. Durante l'allenamento, il riquadro in alto mostra anche l'ora di inizio. A fine allenamento il **riepilogo** mostra ora di inizio, ora di fine, durata (da "Inizia" a "Termina sessione") , poi le serie fatte, gli eventuali record e la serie migliore di ogni esercizio confrontata con l'ultima volta. Se la sessione è stata aperta più di 2 ore prima della prima serie, si parte dalla prima serie; se è stata chiusa più di 2 ore dopo l'ultima (per esempio il giorno dopo), ci si ferma all'ultima.
 
@@ -105,14 +105,15 @@ Dove compare:
 Entrambi i PDF riportano la data in cui sono stati generati. Il PDF delle misure si riferisce al giorno scelto (di default oggi): le circonferenze più recenti fino a quel giorno, con la loro data, e il peso dei 7 giorni che finiscono lì. Le pesate fatte su un'altra bilancia sono segnate con l'asterisco.
 L'import di un backup unisce il file ai dati del telefono.
 
-## Nuova scheda del coach
+## Nuova scheda
 
-Ogni 4-8 settimane:
-1. Manda il PDF della scheda a Claude e fatti preparare il file della scheda (`.json`, `type: "gymlog-program"`).
-2. Importalo da **Scheda → ⋯ → Nuovo ciclo dalla scheda del coach**, scegliendo la data di inizio.
+Ogni 4-8 settimane, da **Scheda → ⋯ → Nuovo ciclo dalla scheda del coach** (o dalla Home a ciclo chiuso), scegli il **PDF della scheda**. L'app lo legge sul telefono, anche offline, e ti guida:
+1. **Scheda letta**: schede, esercizi, settimane, giorni consigliati e data di inizio del ciclo, più il confronto con il catalogo.
+2. **Un esercizio alla volta**, scheda per scheda: già nel catalogo (verde), con un nome simile da collegare (arancione, con la percentuale di somiglianza) oppure nuovo (viola, da aggiungere al catalogo). Serie×ripetizioni per settimana, MAV, recupero (− / + e tempi rapidi), TUT, note e video sono già compilati e si possono correggere.
+3. **Riepilogo** di tutte le schede, con il salto a qualsiasi esercizio, e "Crea il ciclo".
 
-Il ciclo in corso continua fino alla data di inizio della scheda nuova e quel giorno si chiude da solo. Resta consultabile e modificabile.
-Gli esercizi nuovi entrano nel catalogo, quelli già presenti vengono riconosciuti per nome.
+Collegare un nome simile fa continuare lo storico, i record e i carichi precompilati di quell'esercizio. Se chiudi l'app a metà, l'import resta in Scheda con "Riprendi l'import". Le date vengono per prime: se il nuovo ciclo si sovrappone a quello in corso, l'app chiede di chiudere il ciclo in corso il giorno prima e di far partire il nuovo dal primo giorno libero (il giorno dopo l'ultima sessione registrata, se la data del PDF cade prima). Le sessioni già registrate restano nel loro ciclo, che da quel momento finisce in quella data. Il nuovo ciclo non può mai iniziare prima dell'ultima sessione registrata.
+Funziona anche con un file `.json` di Harden (`type: "gymlog-program"`), che passa dagli stessi passaggi. Il PDF viene letto con pdf.js (in `vendor/pdfjs/`, licenza Apache 2.0), caricato solo quando scegli un PDF, e non lascia il telefono.
 
 ## Limiti di iOS
 
@@ -124,7 +125,7 @@ Gli esercizi nuovi entrano nel catalogo, quelli già presenti vengono riconosciu
 A ogni rilascio:
 1. Cambia `APP_VERSION` in `js/core.js` e `VERSION` in `sw.js`.
 2. Se aggiungi un file JavaScript, aggiungilo anche alla lista `SHELL` in `sw.js`, altrimenti offline non c'è.
-3. Fai girare i test: `node --test tests/logic.test.mjs`.
+3. Fai girare i test: `node --test tests/*.test.mjs`.
 4. Usa Conventional Commits (`feat:`, `fix:`, …).
 
 ## Struttura del codice
@@ -141,11 +142,13 @@ js/data.js            store locale (localStorage), merge per elemento, soft dele
 js/github.js          sincronizzazione con l'API Contents di GitHub
 js/logic.js           logica pura: date, schede, target, storico, logbook, report, grafici
 js/pdf.js             PDF del logbook e delle misure (pdf-lib in vendor/)
+js/pdfimport.js       lettura del PDF della scheda (pdf.js in vendor/pdfjs/)
 js/timer.js           timer di recupero e wake lock dello schermo
 js/charts.js          grafici su asse dei tempi e sparkline
 js/views/dashboard.js Home
 js/views/session.js   sessione, sostituzioni, storico esercizio, bilancieri e dischi
-js/views/program.js   Scheda (programma, sessioni, editor, import, cicli)
+js/views/program.js   Scheda (programma, sessioni, editor, cicli)
+js/views/import.js    import guidato della scheda
 js/views/measures.js  Misure
 js/views/report.js    Report
 js/views/logbook.js   Logbook
@@ -153,6 +156,7 @@ js/views/settings.js  Impostazioni, catalogo, backup
 js/views/payments.js  Pagamento coaching
 js/reminders.js       scadenze dei promemoria: chip, pallini, conto dei giorni
 tests/logic.test.mjs  test della logica e del merge (node --test)
+tests/pdfimport.test.mjs  test della lettura del PDF, su una pagina finta
 ```
 
 ## Dati (`harden-data.json`)

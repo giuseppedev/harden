@@ -13,8 +13,9 @@ import { viewMeasures, setMeasure } from "./views/measures.js";
 import { viewReport } from "./views/report.js";
 import { viewLogbook } from "./views/logbook.js";
 import { viewSettings } from "./views/settings.js";
+import { viewImport, fitImportFields } from "./views/import.js";
 
-const VIEWS = { home: viewDashboard, workout: viewWorkout, program: viewProgram, measures: viewMeasures, report: viewReport, logbook: viewLogbook, settings: viewSettings };
+const VIEWS = { home: viewDashboard, workout: viewWorkout, program: viewProgram, measures: viewMeasures, report: viewReport, logbook: viewLogbook, settings: viewSettings, import: viewImport };
 const TITLES = { home: "Harden", program: "Scheda", measures: "Misure", report: "Report", logbook: "Logbook", settings: "Impostazioni" };
 
 /* ================= Rendering ================= */
@@ -50,7 +51,7 @@ function renderHeader() {
 
 /** While a session is open, a bar above the tabs takes you back to it from every section but Home. */
 function renderResumeBar(d) {
-  const bar = $("#resumeBar"), open = d && store.hasData() && !["workout", "home"].includes(ui.view) ? L.openSession(d) : null; // Home has its own card
+  const bar = $("#resumeBar"), open = d && store.hasData() && !["workout", "home", "import"].includes(ui.view) ? L.openSession(d) : null; // Home has its own card
   bar.hidden = !open;
   document.body.classList.toggle("has-resume", !!open);
   if (!open) return;
@@ -77,6 +78,9 @@ function render() {
   if (!store.hasData() && ui.view !== "settings") v.innerHTML = viewWelcome();
   else v.innerHTML = (VIEWS[ui.view] || viewDashboard)(d);
   if (ui.view === "workout") refreshBarTotals();
+  // The import is full screen: its own top bar and footer, no app header or tab bar.
+  document.body.classList.toggle("importing", ui.view === "import");
+  if (ui.view === "import") fitImportFields();
   wakeLock(ui.view === "workout");
 }
 

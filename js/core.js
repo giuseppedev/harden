@@ -5,7 +5,7 @@ import * as gh from "./github.js";
 import * as L from "./logic.js";
 import * as pdf from "./pdf.js";
 
-export const APP_VERSION = "2.6.0";
+export const APP_VERSION = "2.7.0";
 export const TAGLINE = "every set, on record.";
 export const $ = (s, root = document) => root.querySelector(s);
 export const $$ = (s, root = document) => [...root.querySelectorAll(s)];

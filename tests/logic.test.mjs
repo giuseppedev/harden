@@ -146,3 +146,23 @@ test("fmtSet writes reps first, then kg", () => {
   assert.equal(L.fmtSet({ reps: 3, load: 45 }), "3×45 kg");
   assert.equal(L.fmtSet({ reps: 18, load: null }), "18 rip");
 });
+
+test("similarity and catalogMatches: same name, similar name, new", () => {
+  assert.equal(L.similarity("Row machine (presa stretta)", "row machine presa stretta"), 1);
+  assert.ok(L.similarity("Row machine (presa stretta)", "Row machine stretta") < 1);
+  const cat = [{ id: "a", name: "Row machine stretta" }, { id: "b", name: "Row machine (presa stretta)", deleted: true }, { id: "c", name: "Squat" }];
+  const m = L.catalogMatches(cat, "Row machine (presa stretta)");
+  assert.equal(m.kind, "sim");
+  assert.deepEqual(m.cands.map((c) => c.ex.id), ["a"], "deleted exercises are never offered");
+  assert.equal(L.catalogMatches(cat, "squat").kind, "ok");
+  assert.equal(L.catalogMatches([], "Squat").kind, "new");
+  assert.equal(L.catalogMatches(cat, "Leg raises a terra").kind, "new");
+});
+
+test("cycleEnd: a cycle closed early ends on its endDate, and plans only the weeks it lasted", () => {
+  const c = cycle({ startDate: "2026-10-19", weeks: 4, sheets: { A: [slot], B: [{ ...slot, id: "B1" }] } });
+  assert.equal(L.cycleEnd(c), "2026-11-15");
+  const cut = { ...c, endDate: "2026-10-23", closed: true };
+  assert.equal(L.cycleEnd(cut), "2026-10-23");
+  assert.equal(L.plannedSessions({ sessions: [] }, cut), 2, "one week of two sheets");
+});

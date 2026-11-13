@@ -47,7 +47,7 @@ function nowCard(d, c, letters) {
       <div class="row"><div><div class="big">${esc(open.sheet)}</div><div class="hint" style="font-size:14px">${esc(L.fmtDate(open.date))} · ${p.done} di ${p.total} esercizi</div></div>
       <button class="btn" data-act="open-session" data-id="${open.id}">Riprendi</button></div></section>`;
   }
-  if (c.closed) return `<section class="card stack"><div class="label">Ciclo ${c.number} chiuso</div><p class="hint" style="font-size:14px">Importa la scheda nuova del coach per iniziare il prossimo ciclo.</p><label class="btn" for="programFileHome">Importa la scheda nuova</label><input id="programFileHome" type="file" accept=".json,application/json" data-act="import-program-file" class="vh"></section>`;
+  if (c.closed) return `<section class="card stack"><div class="label">Ciclo ${c.number} chiuso</div><p class="hint" style="font-size:14px">Importa la scheda nuova del coach per iniziare il prossimo ciclo.</p><label class="btn" for="programFileHome">Importa la scheda nuova</label><input id="programFileHome" type="file" accept=".pdf,application/pdf,.json,application/json" data-act="import-program-file" class="vh"></section>`;
   const sug = L.nextSuggestion(d, c);
   const slots = c.sheets[sug.sheet] || [];
   const lastSame = L.sessionsOf(d, c.id).filter((s) => s.sheet === sug.sheet && s.finishedAt).pop();

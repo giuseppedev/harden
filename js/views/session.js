@@ -61,14 +61,17 @@ export function progressOf(s) {
 /**
  * Workout span { start, end } in ms, from "Inizia" (the session's creation) to "Termina". Guards for sessions not
  * lived in real time: if the session was opened long before the first set (or logged afterwards) it starts at the
- * first set; if it was closed long after the last set (e.g. the next day) it stops at the last set. Null without sets.
+ * first set; if it was closed long after the last set (e.g. the next day) it stops at the last set. Sets ticked after
+ * "Termina" (fixing the session later) are left out. Null without sets.
  */
 const SLACK = 2 * 3600000;
 export function sessionSpan(s) {
-  const times = Object.values(s.entries || {}).flatMap((e) => (e.sets || []).map((st) => st?.at)).filter(Boolean).map(Date.parse).filter(Number.isFinite).sort((a, b) => a - b);
+  const created = Date.parse(s.createdAt), fin = Date.parse(s.finishedAt);
+  // Sets ticked after "Termina" are later fixes, not part of the workout.
+  const times = Object.values(s.entries || {}).flatMap((e) => (e.sets || []).map((st) => st?.at)).filter(Boolean).map(Date.parse)
+    .filter((t) => Number.isFinite(t) && !(t > fin)).sort((a, b) => a - b);
   if (!times.length) return null;
   const first = times[0], last = times[times.length - 1];
-  const created = Date.parse(s.createdAt), fin = Date.parse(s.finishedAt);
   return { start: created <= first && first - created <= SLACK ? created : first, end: fin >= last && fin - last <= SLACK ? fin : last };
 }
 export function sessionMinutes(s) {
@@ -109,7 +112,7 @@ export function viewWorkout(d) {
     ${s.finishedAt ? `<button class="mini" data-act="workout-back">Fatto</button>` : ""}</div>
     <div class="progress ${s.finishedAt ? "" : "live"}"><i id="sessBar" style="width:${p.ratio * 100}%"></i></div></section>
   ${slots.map((slot) => exerciseCard(d, c, s, slot)).join("")}
-  ${s.finishedAt ? "" : `<button class="btn" data-act="finish">Termina sessione</button>`}`;
+  ${s.finishedAt ? "" : finishButtons(s)}`;
 }
 
 function exerciseCard(d, c, s, slot) {
@@ -207,8 +210,15 @@ export function onSetInput(row) {
   updateBarTotal(slotId);
 }
 
+/** Before the first set is ticked a session opened by mistake can be cancelled; after that it can be finished. */
+const finishButtons = (s) => `<div id="sessEnd">${L.sessionHasWork(s)
+  ? `<button class="btn" data-act="finish">Termina sessione</button>`
+  : `<button class="btn ghost" style="color:var(--danger)" data-act="session-delete" data-id="${s.id}">Annulla sessione</button>`}</div>`;
+
 function refreshProgress() {
   const s = current(), p = progressOf(s);
+  const end = $("#sessEnd");
+  if (end && !s.finishedAt) end.outerHTML = finishButtons(s);
   if ($("#sessProg")) $("#sessProg").textContent = `${p.done} di ${p.total}`;
   if ($("#sessBar")) $("#sessBar").style.width = `${p.ratio * 100}%`;
 }
@@ -244,7 +254,12 @@ function onCheck(btn) {
   const done = !row.classList.contains("done");
   const values = readSet(row);
   const slot0 = slotOf(s, slotId), prBefore = prIndex(D(), current(), slot0);
-  withEntry(slotId, (e) => { e.sets[k] = { ...values, done, ...(done ? { at: store.now() } : {}) }; });
+  // Ticking a set stamps its time, which measures the workout. In a session already finished it keeps the old time
+  // (if any): fixing a past session never stretches how long it lasted.
+  withEntry(slotId, (e, _d, sess) => {
+    const at = sess.finishedAt ? e.sets[k]?.at : store.now();
+    e.sets[k] = { ...values, done, ...(done && at ? { at } : {}) };
+  });
   row.classList.toggle("done", done);
   btn.setAttribute("aria-pressed", String(done));
   if (done) flash(btn, "pop");
