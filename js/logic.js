@@ -75,6 +75,11 @@ export function currentCycle(d) {
   const started = cs.filter((c) => c.startDate <= today);
   return started.filter((c) => !c.closed).pop() || started.pop() || cs[0] || null;
 }
+/** A cycle imported ahead of its start, still waiting: the Home says when it begins. */
+export function upcomingCycle(d) {
+  const today = todayISO();
+  return cyclesSorted(d).find((c) => c.startDate > today) || null;
+}
 /** Close every open cycle once a newer one has started (unless reopened by hand); returns true when something changed. */
 export function closeSupersededCycles(d, now) {
   const today = todayISO();
@@ -176,6 +181,8 @@ export function nextSuggestion(d, cycle) {
   if (i >= 0 && i < L.length - 1) return { sheet: L[i + 1], week: last.week };
   return { sheet: L[0], week: Math.min(last.week + 1, cycle.weeks) };
 }
+/** Every sheet of the last week done: nothing left to suggest in this cycle. */
+export const cycleComplete = (d, cycle) => sheetLetters(cycle).length > 0 && sheetLetters(cycle).every((l) => doneInWeek(d, cycle, l, cycle.weeks));
 export const doneInWeek = (d, cycle, sheet, week) => sessionsOf(d, cycle.id).some((s) => s.sheet === sheet && s.week === week && (s.finishedAt || sessionHasWork(s)));
 
 /* ---------- History ---------- */

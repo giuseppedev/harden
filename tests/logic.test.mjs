@@ -194,3 +194,10 @@ test("painZones lists the zones used before, most recent first, without repeats"
   const d = { sessions: [s("2026-11-01", "Spalla dx"), s("2026-11-05", "gomito sx"), s("2026-11-08", "spalla dx"), s("2026-11-09", "polso", ["heavy"])] };
   assert.deepEqual(L.painZones(d), ["spalla dx", "gomito sx"]);
 });
+
+test("cycleComplete: every sheet of the last week done", () => {
+  const cycle = { id: "c1", weeks: 2, sheets: { A: [], B: [] } };
+  const s = (sheet, week) => ({ id: sheet + week, cycleId: "c1", sheet, week, date: "2026-11-0" + week, finishedAt: "x", entries: {} });
+  assert.equal(L.cycleComplete({ sessions: [s("A", 1), s("B", 1), s("A", 2)] }, cycle), false);
+  assert.equal(L.cycleComplete({ sessions: [s("A", 1), s("B", 1), s("A", 2), s("B", 2)] }, cycle), true);
+});

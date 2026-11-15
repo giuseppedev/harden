@@ -390,6 +390,9 @@ textarea { resize: vertical; }
 .banner.danger .btn { background: #fff; color: var(--danger); }
 .nowrap { white-space: nowrap; flex: none; }
 .cycle-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+.log-export .row { gap: 8px; }
+.log-export select { flex: 1; min-width: 0; }
+.up-next { font-size: 14px; margin: 0; }
 .cycle-bar .new-cycle { white-space: nowrap; cursor: pointer; }
 label.menu-item { display: block; cursor: pointer; }
 .tabs button.dot.over::after, .icon-btn.dot.over::after { background: var(--danger); }

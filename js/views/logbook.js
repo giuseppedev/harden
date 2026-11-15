@@ -1,6 +1,7 @@
 // Logbook: the coach's sheet, one page per sheet letter, filled only in the weeks done. Exported as PDF.
 import * as L from "../logic.js";
 import { esc, D, ui, actions, render, cycle, exportCard, runExport } from "../core.js";
+import { cyclePicker } from "./program.js";
 
 export function viewLogbook(d) {
   const c = cycle();
@@ -24,7 +25,11 @@ export function viewLogbook(d) {
   // Feedback and notes of each exercise, under the grid in the same week columns; only when there is any.
   const fbRows = rows.map((r, idx) => ({ r, idx })).filter(({ r }) => Object.keys(r.feedback).length);
   const fb = fbRows.length ? `<tr><th class="name fb-title">Feedback e note</th>${weeks.map((w) => `<th colspan="4" class="sep">Settimana ${w}</th>`).join("")}</tr>${fbRows.map(({ r, idx }) => `<tr class="fb-line"><td class="name">${idx + 1}. ${esc(L.exName(d, r.exerciseId))}</td>${weeks.map((w) => `<td colspan="4" class="sep fb-text">${esc(r.feedback[w] || "")}</td>`).join("")}</tr>`).join("")}` : "";
-  return `${exportCard(`Logbook ciclo ${c.number}`, `${L.fmtRange(c.startDate, L.cycleEnd(c))} · tutte le schede`, "export-logbook")}
+  // With several cycles the picker takes the card's title, next to the export (same cycle as in Scheda).
+  const top = L.cyclesSorted(d).length > 1
+    ? `<section class="card stack log-export"><div class="label">Logbook · tutte le schede</div><div class="row">${cyclePicker(d, c)}<button class="btn small nowrap" data-act="export-logbook">Esporta PDF</button></div></section>`
+    : exportCard(`Logbook ciclo ${c.number}`, `${L.fmtRange(c.startDate, L.cycleEnd(c))} · tutte le schede`, "export-logbook");
+  return `${top}
   <div class="grid4">${letters.map((l) => `<button class="pick ${l === ui.sheet ? "sel" : ""}" data-act="log-sheet" data-sheet="${esc(l)}"><b>${esc(l)}</b></button>`).join("")}</div>
   <div class="sheet-wrap"><div class="sheet-head"><b>Scheda ${esc(ui.sheet)}</b><span>${esc(d.profile?.athlete || "")} · Ciclo ${c.number}</span></div>
   <table class="sheet">${head}${body}${fb}</table></div>`;

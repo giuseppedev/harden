@@ -47,7 +47,13 @@ function nowCard(d, c, letters) {
       <div class="row"><div><div class="big">${esc(open.sheet)}</div><div class="hint" style="font-size:14px">${esc(L.fmtDate(open.date))} · ${p.done} di ${p.total} esercizi</div></div>
       <button class="btn" data-act="open-session" data-id="${open.id}">Riprendi</button></div></section>`;
   }
-  if (c.closed) return `<section class="card stack"><div class="label">Ciclo ${c.number} chiuso</div><p class="hint" style="font-size:14px">Importa la scheda nuova del coach per iniziare il prossimo ciclo.</p><label class="btn" for="programFileHome">Importa la scheda nuova</label><input id="programFileHome" type="file" accept=".pdf,application/pdf,.json,application/json" data-act="import-program-file" class="vh"></section>`;
+  // A new cycle imported ahead of its start: the current one goes on until then, and the Home says so.
+  const next = L.upcomingCycle(d);
+  const nextLine = next ? `<p class="hint up-next">Il ciclo ${next.number} parte ${esc(L.fmtDate(next.startDate))}. Fino ad allora resti nel ciclo ${c.number}.</p>` : "";
+  // Closed, or every sheet of the last week done: no session to suggest (it would start week 4 over again).
+  const ended = c.closed ? `Ciclo ${c.number} chiuso` : L.cycleComplete(d, c) ? `Ciclo ${c.number} completato` : "";
+  if (ended && next) return `<section class="card stack"><div class="label">${ended}</div><p class="hint" style="font-size:14px">Il ciclo ${next.number} parte ${esc(L.fmtDate(next.startDate))}.</p></section>`;
+  if (ended) return `<section class="card stack"><div class="label">${ended}</div><p class="hint" style="font-size:14px">Importa la scheda nuova del coach per iniziare il prossimo ciclo.</p><label class="btn" for="programFileHome">Importa la scheda nuova</label><input id="programFileHome" type="file" accept=".pdf,application/pdf,.json,application/json" data-act="import-program-file" class="vh"></section>`;
   const sug = L.nextSuggestion(d, c);
   const slots = c.sheets[sug.sheet] || [];
   const lastSame = L.sessionsOf(d, c.id).filter((s) => s.sheet === sug.sheet && s.finishedAt).pop();
@@ -58,7 +64,7 @@ function nowCard(d, c, letters) {
     <div class="grid4">${letters.map((l) => {
       const isDone = L.doneInWeek(d, c, l, sug.week);
       return `<button class="pick ${l === sug.sheet ? "sel" : ""} ${isDone ? "done" : ""}" data-act="start" data-sheet="${esc(l)}" data-week="${sug.week}"><b>${esc(l)}</b><small>${isDone ? "✓ fatta" : l === sug.sheet ? "suggerita" : esc(c.dayPlan?.[l] || "da fare")}</small></button>`;
-    }).join("")}</div></section>`;
+    }).join("")}</div>${nextLine}</section>`;
 }
 
 function kpis(d, c, letters) {

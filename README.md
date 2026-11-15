@@ -9,10 +9,10 @@ Funziona offline. I dati restano sul telefono e vengono sincronizzati in un file
 
 | Tab | A cosa serve |
 |---|---|
-| **Home** | Promemoria (peso, circonferenze, token, rata del coaching), sessione in corso o prossima scheda da iniziare, sessioni della settimana, peso, ultimi record e ultime sessioni. Usa sempre il ciclo in corso. |
+| **Home** | Promemoria (peso, circonferenze, token, rata del coaching), sessione in corso o prossima scheda da iniziare, sessioni della settimana, peso, ultimi record e ultime sessioni. Usa sempre il ciclo in corso: un ciclo nuovo importato in anticipo parte dalla sua data, e fino ad allora la Home dice quando inizia. A ciclo completato non propone altre sessioni. |
 | **Scheda** | Ciclo scelto, con "＋ Nuovo ciclo" accanto e il menu ⋯ per chiuderlo o riaprirlo. **Programma**: esercizi per scheda e settimana, dettaglio con target, regolazioni e note del coach, modifica della scheda. **Sessioni**: sessioni del ciclo divise per settimana, da aprire e correggere, e inserimento di una sessione passata. |
 | **Misure** | Peso (sempre con due decimali, indicando la bilancia usata) e 8 circonferenze. Grafici per settimana, mese, trimestre, anno o tutto, storico ed export PDF. |
-| **Logbook** | Il foglio del coach, una pagina per scheda (ogni 4 settimane per i cicli più lunghi), ed export PDF. Sotto la griglia, "Feedback e note": per ogni esercizio e settimana il feedback che hai dato e la nota; c'è solo se c'è qualcosa da dire. |
+| **Logbook** | Il ciclo da vedere (lo stesso scelto in Scheda), il foglio del coach, una pagina per scheda (ogni 4 settimane per i cicli più lunghi), ed export PDF. Sotto la griglia, "Feedback e note": per ogni esercizio e settimana il feedback che hai dato e la nota; c'è solo se c'è qualcosa da dire. |
 | **Report** | Confronto tra i cicli scelti: progressione dei carichi, volume per distretto, peso e circonferenze a inizio e fine. |
 | **⚙︎ Impostazioni** | Sincronizzazione, atleta e attrezzatura (bilancieri, dischi), catalogo esercizi, pagamento coaching, backup. |
 

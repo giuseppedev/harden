@@ -15,13 +15,19 @@ function pickSheet(c) {
 
 const fileInput = `<input id="programFile" type="file" accept=".pdf,application/pdf,.json,application/json" data-act="import-program-file" class="vh">`;
 
-/** Cycle bar: the cycle shown (a picker when there are several), "Nuovo ciclo" (picks the program PDF) and a ⋯ menu to close or reopen. */
-function cycleBar(d, c) {
+/** The cycle shown: a picker when there are several (shared by Scheda and Logbook), otherwise its name and dates. */
+export function cyclePicker(d, c) {
   const cycles = L.cyclesSorted(d);
-  const label = (x) => `Ciclo ${x.number} · ${esc(L.fmtRange(x.startDate, L.cycleEnd(x)))}${x.closed ? " · chiuso" : ""}`;
-  const pick = cycles.length < 2 ? `<div class="hint">${label(c)}</div>`
+  // The year only when it is not this one: the label stays short enough to sit next to a button.
+  const year = L.todayISO().slice(0, 4);
+  const range = (x) => (L.cycleEnd(x).startsWith(year) ? `${L.fmtDate(x.startDate, { weekday: false })} – ${L.fmtDate(L.cycleEnd(x), { weekday: false })}` : L.fmtRange(x.startDate, L.cycleEnd(x)));
+  const label = (x) => `Ciclo ${x.number} · ${esc(range(x))}${x.closed ? " · chiuso" : ""}`;
+  return cycles.length < 2 ? `<div class="hint">${label(c)}</div>`
     : `<select data-act="cycle" aria-label="Ciclo">${cycles.slice().reverse().map((x) => `<option value="${x.id}" ${x.id === c.id ? "selected" : ""}>${label(x)}</option>`).join("")}</select>`;
-  return `<div class="cycle-bar">${pick}<label class="mini new-cycle" for="programFile">＋ Nuovo ciclo</label><button class="icon-btn" data-act="cycle-menu" aria-label="Azioni sul ciclo">⋯</button></div>${fileInput}`;
+}
+/** Cycle bar: the cycle picker, "Nuovo ciclo" (picks the program PDF) and a ⋯ menu to close or reopen. */
+function cycleBar(d, c) {
+  return `<div class="cycle-bar">${cyclePicker(d, c)}<label class="mini new-cycle" for="programFile">＋ Nuovo ciclo</label><button class="icon-btn" data-act="cycle-menu" aria-label="Azioni sul ciclo">⋯</button></div>${fileInput}`;
 }
 
 export function viewProgram(d) {
