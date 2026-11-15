@@ -142,6 +142,8 @@ details p b { color: var(--fg); }
 .sheet .sep { border-left: 2px solid #111; }
 .sheet .filled { color: #0b3ea8; font-weight: 700; font-family: var(--body); font-variant-numeric: tabular-nums; }
 .sheet .subrow .num { background: #e7dcf6; }
+.sheet .fb-title { padding-top: 14px; }
+.sheet .fb-text { text-align: left; vertical-align: top; font-size: 10px; line-height: 1.3; height: auto; }
 .sheet-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 8px; gap: 8px; flex-wrap: wrap; }
 
 /* Tables (report, measures) */
@@ -349,6 +351,19 @@ details p b { color: var(--fg); }
 .bar-row { display: grid; grid-template-columns: 1fr; gap: 6px; margin-top: 12px; }
 .note-input { margin-top: 10px; }
 .card-acts { display: flex; gap: 8px; margin-top: 10px; }
+/* Quick feedback on an exercise: toggles; "Fastidio" in the warm colour, with its "Dove?" field. */
+.fb { margin-top: 12px; }
+.fb[hidden] { display: none; }
+.fb.fb-in { animation: fb-in .3s ease-out; }
+@keyframes fb-in { from { opacity: 0; transform: translateY(-4px); } }
+.fb-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.fb-chip { border: 1px solid transparent; background: var(--bg); color: var(--muted); border-radius: 999px; padding: 6px 11px; min-height: 36px; font-size: 13px; font-weight: 600; transition: background-color .15s, color .15s, border-color .15s; }
+.fb-chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.fb-chip.pain.on { background: var(--rest-soft); border-color: var(--rest); color: var(--rest); }
+.fb-where { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.fb-where[hidden] { display: none; }
+.fb-zones { display: flex; flex-wrap: wrap; gap: 6px; }
+.fb-zones:empty { display: none; }
 .menu { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .menu-item { border: 0; border-bottom: 1px solid var(--line); background: var(--surface); text-align: left; padding: 14px; font-size: 16px; font-weight: 600; }
 .menu-item:last-child { border-bottom: 0; }
@@ -374,7 +389,8 @@ textarea { resize: vertical; }
 .groups summary.plain { text-transform: none; }
 .banner.danger .btn { background: #fff; color: var(--danger); }
 .nowrap { white-space: nowrap; flex: none; }
-.cycle-bar { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+.cycle-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; }
+.cycle-bar .new-cycle { white-space: nowrap; cursor: pointer; }
 label.menu-item { display: block; cursor: pointer; }
 .tabs button.dot.over::after, .icon-btn.dot.over::after { background: var(--danger); }
 .due { font-weight: 700; text-transform: none; letter-spacing: 0; }

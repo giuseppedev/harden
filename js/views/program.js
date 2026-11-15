@@ -15,13 +15,13 @@ function pickSheet(c) {
 
 const fileInput = `<input id="programFile" type="file" accept=".pdf,application/pdf,.json,application/json" data-act="import-program-file" class="vh">`;
 
-/** Cycle bar: the cycle shown (a picker when there are several) and a ⋯ menu for cycle-level actions. */
+/** Cycle bar: the cycle shown (a picker when there are several), "Nuovo ciclo" (picks the program PDF) and a ⋯ menu to close or reopen. */
 function cycleBar(d, c) {
   const cycles = L.cyclesSorted(d);
   const label = (x) => `Ciclo ${x.number} · ${esc(L.fmtRange(x.startDate, L.cycleEnd(x)))}${x.closed ? " · chiuso" : ""}`;
   const pick = cycles.length < 2 ? `<div class="hint">${label(c)}</div>`
     : `<select data-act="cycle" aria-label="Ciclo">${cycles.slice().reverse().map((x) => `<option value="${x.id}" ${x.id === c.id ? "selected" : ""}>${label(x)}</option>`).join("")}</select>`;
-  return `<div class="cycle-bar">${pick}<button class="icon-btn" data-act="cycle-menu" aria-label="Azioni sul ciclo">⋯</button></div>${fileInput}`;
+  return `<div class="cycle-bar">${pick}<label class="mini new-cycle" for="programFile">＋ Nuovo ciclo</label><button class="icon-btn" data-act="cycle-menu" aria-label="Azioni sul ciclo">⋯</button></div>${fileInput}`;
 }
 
 export function viewProgram(d) {
@@ -207,7 +207,6 @@ Object.assign(actions, {
     const c = cycle();
     openModal(`<div><div class="label">${esc(L.fmtRange(c.startDate, L.cycleEnd(c)))}</div><h2>Ciclo ${c.number}</h2></div>
       <div class="menu">
-        <label class="menu-item" for="programFile">＋ Nuovo ciclo dalla scheda del coach</label>
         ${c.closed ? `<button class="menu-item" data-act="reopen-cycle" data-id="${c.id}">↺ Riapri ciclo ${c.number}</button>` : `<button class="menu-item" data-confirm="close-cycle" data-id="${c.id}">Chiudi ciclo ${c.number}</button>`}
       </div>
       <p class="hint">Il ciclo in corso si chiude da solo il giorno in cui inizia quello nuovo. I cicli chiusi restano consultabili e modificabili.</p>

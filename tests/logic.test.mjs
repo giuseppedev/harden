@@ -166,3 +166,31 @@ test("cycleEnd: a cycle closed early ends on its endDate, and plans only the wee
   assert.equal(L.cycleEnd(cut), "2026-10-23");
   assert.equal(L.plannedSessions({ sessions: [] }, cut), 2, "one week of two sheets");
 });
+
+test("schemaLabel leaves out blocks with 0 sets that week", () => {
+  const blocks = [{ mav: true, sets: [3, 3], reps: ["7", "7"] }, { sets: [3, 0], reps: ["4", ""] }];
+  assert.equal(L.schemaLabel(blocks, 1), "MAV 7 + 3×4");
+  assert.equal(L.schemaLabel(blocks, 2), "MAV 7");
+  assert.equal(L.targetsFor(blocks, 2).length, 3);
+});
+
+test("toggleFeedback: Leggero and Pesante exclude each other, the rest add up", () => {
+  assert.deepEqual(L.toggleFeedback([], "heavy"), ["heavy"]);
+  assert.deepEqual(L.toggleFeedback(["heavy", "pain"], "light"), ["light", "pain"]);
+  assert.deepEqual(L.toggleFeedback(["pain", "shortRest"], "technique"), ["shortRest", "technique", "pain"]);
+  assert.deepEqual(L.toggleFeedback(["shortRest"], "shortRest"), []);
+});
+
+test("feedbackLine joins the feedback given, the pain zone and the note", () => {
+  const entry = { feedback: ["heavy", "pain"], painWhere: "spalla dx", note: "panca stretta", sets: [{ reps: 2, load: 40, done: true }] };
+  assert.equal(L.feedbackText(entry), "Pesante · Fastidio: spalla dx");
+  assert.equal(L.feedbackLine(entry), "Pesante · Fastidio: spalla dx · panca stretta");
+  assert.equal(L.feedbackLine({ sets: [] }), "");
+  assert.equal(L.feedbackText({ feedback: ["pain"] }), "Fastidio");
+});
+
+test("painZones lists the zones used before, most recent first, without repeats", () => {
+  const s = (date, painWhere, fb = ["pain"]) => ({ id: date + painWhere, date, entries: { a: { feedback: fb, painWhere } } });
+  const d = { sessions: [s("2026-11-01", "Spalla dx"), s("2026-11-05", "gomito sx"), s("2026-11-08", "spalla dx"), s("2026-11-09", "polso", ["heavy"])] };
+  assert.deepEqual(L.painZones(d), ["spalla dx", "gomito sx"]);
+});

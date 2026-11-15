@@ -21,10 +21,13 @@ export function viewLogbook(d) {
     lines[0] = lines[0].replace(/^<tr([^>]*)>/, `<tr$1><td class="name" rowspan="${halves * 3}">${idx + 1}. ${esc(L.exName(d, r.exerciseId))}${r.isSub ? `<small>(sost. di ${esc(L.exName(d, r.originalId))})</small>` : ""}${Object.keys(r.variants).length ? `<small class="var">${esc(L.variantSummary(r.variants))}</small>` : ""}</td>`);
     return lines.join("");
   }).join("");
+  // Feedback and notes of each exercise, under the grid in the same week columns; only when there is any.
+  const fbRows = rows.map((r, idx) => ({ r, idx })).filter(({ r }) => Object.keys(r.feedback).length);
+  const fb = fbRows.length ? `<tr><th class="name fb-title">Feedback e note</th>${weeks.map((w) => `<th colspan="4" class="sep">Settimana ${w}</th>`).join("")}</tr>${fbRows.map(({ r, idx }) => `<tr class="fb-line"><td class="name">${idx + 1}. ${esc(L.exName(d, r.exerciseId))}</td>${weeks.map((w) => `<td colspan="4" class="sep fb-text">${esc(r.feedback[w] || "")}</td>`).join("")}</tr>`).join("")}` : "";
   return `${exportCard(`Logbook ciclo ${c.number}`, `${L.fmtRange(c.startDate, L.cycleEnd(c))} · tutte le schede`, "export-logbook")}
   <div class="grid4">${letters.map((l) => `<button class="pick ${l === ui.sheet ? "sel" : ""}" data-act="log-sheet" data-sheet="${esc(l)}"><b>${esc(l)}</b></button>`).join("")}</div>
   <div class="sheet-wrap"><div class="sheet-head"><b>Scheda ${esc(ui.sheet)}</b><span>${esc(d.profile?.athlete || "")} · Ciclo ${c.number}</span></div>
-  <table class="sheet">${head}${body}</table></div>`;
+  <table class="sheet">${head}${body}${fb}</table></div>`;
 }
 
 Object.assign(actions, {

@@ -101,7 +101,9 @@ function parseSheetPage(items) {
           rep.push(joinLines(mine.filter((l) => Math.abs(mid(l) - sc) > Math.abs(mid(l) - rc))));
         });
         if (rep.every((r) => /^MA\s?V$/i.test(r))) return { mav: true, sets: sets.map(() => (mav ? +mav[2] : 3)), reps: sets.map(() => (mav ? mav[1] : "")) };
-        return { sets: sets.map((x) => (/^\d+$/.test(x) ? +x : x)), reps: rep.map((r) => r.replace(/\s*-\s*/g, "-")) };
+        // "0" or a dash: no sets of this block that week (e.g. a week with only the MAV).
+        const n = sets.map((x) => (/^\d+$/.test(x) ? +x : /^[-–—]$/.test(x) ? 0 : x));
+        return { sets: n, reps: rep.map((r, w) => (n[w] === 0 ? "" : r.replace(/\s*-\s*/g, "-"))) };
       }),
     };
   });

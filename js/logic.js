@@ -132,7 +132,8 @@ export function blockLabel(b, w) {
   const n = atWeek(b.sets, w), r = atWeek(b.reps, w);
   return b.mav ? `MAV ${r}` : `${n}×${r}`;
 }
-export const schemaLabel = (blocks, w) => (blocks || []).map((b) => blockLabel(b, w)).join(" + ");
+/** The week's scheme, e.g. "MAV 7 + 3×4"; blocks with 0 sets that week are left out. */
+export const schemaLabel = (blocks, w) => (blocks || []).filter((b) => ![0, "0"].includes(atWeek(b.sets, w))).map((b) => blockLabel(b, w)).join(" + ") || "–";
 export const isNumericReps = (r) => /^\d+$/.test(String(r));
 
 /* ---------- Slots and substitutions ---------- */
@@ -256,6 +257,41 @@ export function variantSummary(byWeek) {
   return out.map((g) => `S${g.from}${g.to > g.from ? `–${g.to}` : ""} ${g.v}`).join(" · ");
 }
 
+/* ---------- Exercise feedback ---------- */
+/** Quick feedback on an exercise, toggled after doing it. "Leggero" and "Pesante" exclude each other. */
+export const FEEDBACK = [
+  { k: "light", label: "Leggero" }, { k: "heavy", label: "Pesante" }, { k: "shortRest", label: "Recupero breve" },
+  { k: "technique", label: "Tecnica calata" }, { k: "pain", label: "Fastidio" },
+];
+const FEEDBACK_EXCLUDES = { light: "heavy", heavy: "light" };
+/** The feedback list with `k` switched on or off, in the fixed order of FEEDBACK. */
+export function toggleFeedback(list, k) {
+  const on = new Set(list || []);
+  if (on.has(k)) on.delete(k); else { on.add(k); on.delete(FEEDBACK_EXCLUDES[k]); }
+  return FEEDBACK.map((f) => f.k).filter((x) => on.has(x));
+}
+/** "Pesante · Fastidio: spalla dx", or "" with no feedback. */
+export function feedbackText(entry) {
+  return (entry?.feedback || []).map((k) => {
+    const f = FEEDBACK.find((x) => x.k === k);
+    if (!f) return "";
+    return k === "pain" && entry.painWhere ? `${f.label}: ${entry.painWhere}` : f.label;
+  }).filter(Boolean).join(" · ");
+}
+/** One line for the logbook: the feedback given and the note of that day. */
+export const feedbackLine = (entry) => [feedbackText(entry), entry?.note || ""].filter(Boolean).join(" · ");
+/** Where pain was felt before, most recent first and without repeats: offered as one-tap choices. */
+export function painZones(d, limit = 4) {
+  const seen = new Map();
+  for (const s of live(d.sessions).slice().sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.createdAt || "").localeCompare(a.createdAt || ""))) {
+    for (const e of Object.values(s.entries || {})) {
+      const z = (e.feedback || []).includes("pain") && String(e.painWhere || "").trim();
+      if (z && !seen.has(z.toLowerCase())) seen.set(z.toLowerCase(), z);
+    }
+  }
+  return [...seen.values()].slice(0, limit);
+}
+
 /* ---------- Coach logbook ---------- */
 export function logbookRows(d, cycle, sheet) {
   const sessions = sessionsOf(d, cycle.id).filter((s) => s.sheet === sheet);
@@ -270,7 +306,7 @@ export function logbookRows(d, cycle, sheet) {
     const ov = cycle.overrides?.[slot.id];
     if (ov && !ids.includes(ov.exerciseId)) ids.push(ov.exerciseId);
     for (const exId of ids) {
-      const weeks = {}, variants = {};
+      const weeks = {}, variants = {}, feedback = {};
       for (const s of sessions) {
         const e = s.entries?.[slot.id];
         if (!e) continue;
@@ -278,8 +314,10 @@ export function logbookRows(d, cycle, sheet) {
         if (r.exerciseId !== exId) continue;
         const sets = [...logbookIdx(r.blocks, s.week), ...extraIdx(e, r.blocks, s.week)].map((i) => e.sets?.[i]).filter((x) => x && x.done);
         if (sets.length) { weeks[s.week] = sets; const v = variantOf(d, e); if (v) variants[s.week] = v; }
+        const fb = feedbackLine(e);
+        if (fb) feedback[s.week] = fb;
       }
-      rows.push({ slotId: slot.id, exerciseId: exId, isSub: exId !== slot.exerciseId, originalId: slot.exerciseId, weeks, variants });
+      rows.push({ slotId: slot.id, exerciseId: exId, isSub: exId !== slot.exerciseId, originalId: slot.exerciseId, weeks, variants, feedback });
     }
   }
   return rows;

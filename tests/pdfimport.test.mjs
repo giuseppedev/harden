@@ -61,6 +61,12 @@ test("parseProgramPages reads a program sheet: blocks, MAV, supersets, wrapped c
   assert.ok(!JSON.stringify(p).includes("piè di pagina"), "the page footer is not part of any exercise");
 });
 
+test("parseProgramPages reads 0 sets as a week without that block (only the MAV that week)", () => {
+  const onlyMav = sheetA.map((i) => (i.y === 190 && (i.x + i.w / 2 === 577 || i.x + i.w / 2 === 589) ? { ...i, s: "0" } : i));
+  const [panca] = parseProgramPages([{ items: onlyMav }]).sheets.A;
+  assert.deepEqual(panca.blocks[1], { sets: [3, 0], reps: ["4", ""] });
+});
+
 test("parseProgramPages refuses a PDF that is not a training program", () => {
   assert.throws(() => parseProgramPages([{ items: cover }, { items: [at("Fattura n. 12", 100, 100)] }]), /non sembra una scheda di allenamento/);
 });

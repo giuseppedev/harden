@@ -155,7 +155,8 @@ function exerciseCard(d, c, s, slot) {
   const variant = entry?.variant || lastVariantFor(d, r.exerciseId);
   const variantHtml = ex.variants?.length ? `<label class="variant-row"><span class="label">Variante</span><select data-act="variant" data-slot="${slot.id}">${ex.variants.map((v) => `<option ${v === variant ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>` : "";
   const showNote = !!entry?.note || noteOpen.has(slot.id);
-  const prevNote = !entry?.note && prev?.entry.note ? prev.entry.note : "";
+  // Last time's feedback and note, as a reminder: today's feedback starts empty.
+  const prevLine = prev ? [L.feedbackText(prev.entry), prev.entry.note].filter(Boolean).join(" · ") : "";
   const coach = !r.substitution && coachNotes(slot);
   const sub = r.substitution ? `<div class="subtag">⇄ Sostituisce ${esc(L.exName(d, slot.exerciseId))} · ${r.substitution === "permanent" ? "definitiva" : "solo oggi"}<button data-act="restore" data-slot="${slot.id}">Ripristina</button></div>` : "";
   return `<article class="card ${slotComplete(c, s, slot) ? "complete" : ""}" data-card="${slot.id}">
@@ -167,13 +168,36 @@ function exerciseCard(d, c, s, slot) {
     ${coach ? `<details class="coach" data-coach="${slot.id}" ${coachOpen.has(slot.id) ? "open" : ""}><summary>Note del coach${/^https?:/i.test(slot.video || "") ? " e video" : ""}</summary><div class="notes">${coach}</div></details>` : ""}
     <div class="hist">${chips}</div>
     ${variantHtml}
-    ${prevNote ? `<p class="hint prev-note">Ultima nota: ${esc(prevNote)}</p>` : ""}
+    ${prevLine ? `<p class="hint prev-note">Ultima volta: ${esc(prevLine)}</p>` : ""}
     ${blocks || `<p class="hint" style="margin-top:10px">Nessuna serie prevista questa settimana.</p>`}
     ${extra ? `<div class="block"><span class="label">Serie extra</span>${extraRows}</div>` : ""}
     ${barHtml}
+    ${feedbackHtml(d, slot.id, entry)}
     ${showNote ? `<input class="note-input" type="text" data-act="note" data-slot="${slot.id}" value="${esc(entry?.note || "")}" placeholder="Nota di oggi" aria-label="Nota di oggi">` : ""}
     <div class="card-acts"><button class="mini" data-act="add-set" data-slot="${slot.id}">+ serie</button>${extra ? `<button class="mini danger" data-act="remove-set" data-slot="${slot.id}">− serie</button>` : ""}${showNote ? "" : `<button class="mini" data-act="note-open" data-slot="${slot.id}">＋ nota</button>`}</div>
   </article>`;
+}
+
+/** Feedback is given after doing the exercise: it shows from the first ticked set (or once some is given). */
+const feedbackShown = (entry) => !!(entry?.feedback?.length || entry?.sets?.some((x) => x?.done));
+/** Quick feedback chips; "Fastidio" opens a short "Dove?" field with the zones used before. */
+function feedbackHtml(d, slotId, entry) {
+  const on = entry?.feedback || [], zones = on.includes("pain") ? L.painZones(d) : [];
+  return `<div class="fb" data-fb="${slotId}" ${feedbackShown(entry) ? "" : "hidden"}><div class="fb-row" role="group" aria-label="Com'è andata">${L.FEEDBACK.map((f) => `<button class="fb-chip ${f.k} ${on.includes(f.k) ? "on" : ""}" data-act="fb" data-slot="${slotId}" data-k="${f.k}" aria-pressed="${on.includes(f.k)}">${f.label}</button>`).join("")}</div>
+    <div class="fb-where" ${on.includes("pain") ? "" : "hidden"}><input type="text" autocomplete="off" data-act="fb-where" data-slot="${slotId}" value="${esc(entry?.painWhere || "")}" placeholder="Dove? Per esempio spalla dx" aria-label="Dove senti fastidio">
+      <div class="fb-zones">${zoneButtons(slotId, zones, entry?.painWhere || "")}</div></div></div>`;
+}
+/** One-tap zones, without the one already written in the field. */
+const zoneButtons = (slotId, zones, typed = "") => zones.filter((z) => z.toLowerCase() !== typed.trim().toLowerCase()).map((z) => `<button class="mini" data-act="fb-zone" data-slot="${slotId}" data-z="${esc(z)}">${esc(z)}</button>`).join("");
+/** Shows the chips of an exercise as saved, without re-rendering the session. */
+function refreshFeedback(slotId) {
+  const s = D().sessions.find((x) => x.id === ui.sessionId), on = s?.entries?.[slotId]?.feedback || [];
+  const box = $(`[data-fb="${slotId}"]`);
+  if (!box) return;
+  $$(".fb-chip", box).forEach((b) => { const sel = on.includes(b.dataset.k); b.classList.toggle("on", sel); b.setAttribute("aria-pressed", String(sel)); });
+  $(".fb-where", box).hidden = !on.includes("pain");
+  // Zones typed on other exercises today are offered too, so they are read now rather than at render time.
+  if (on.includes("pain")) $(".fb-zones", box).innerHTML = zoneButtons(slotId, L.painZones(D()), $("[data-act=fb-where]", box).value);
 }
 
 function setRow(slotId, i, target, role, saved, reps, load, pr) {
@@ -268,6 +292,8 @@ function onCheck(btn) {
   const card = row.closest(".card"), complete = slotComplete(cycleOfSession(s), current(), slot);
   if (complete && !card.classList.contains("complete")) flash(card, "just-done");
   card.classList.toggle("complete", complete);
+  const fb = $(`[data-fb="${slotId}"]`, card);
+  if (fb && fb.hidden && done) { fb.hidden = false; flash(fb, "fb-in", 400); }
   const r = L.resolveSlot(cycleOfSession(s), slot, current());
   const prNow = prIndex(D(), current(), slot);
   paintPR(slotId, prNow);
@@ -499,7 +525,7 @@ function confirmSubstitution() {
     }
     const sess = d.sessions.find((x) => x.id === s.id);
     sess.entries ??= {};
-    sess.entries[slot.id] = { exerciseId, substitution: mode, schema, sets: [], barId: sess.entries[slot.id]?.barId, note: sess.entries[slot.id]?.note };
+    sess.entries[slot.id] = { exerciseId, substitution: mode, schema, sets: [], barId: sess.entries[slot.id]?.barId, note: sess.entries[slot.id]?.note, feedback: sess.entries[slot.id]?.feedback, painWhere: sess.entries[slot.id]?.painWhere };
     sess.updatedAt = store.now();
   });
   closeModal();
@@ -540,7 +566,7 @@ function restoreOriginal(slotId) {
     }
     const sess = d.sessions.find((x) => x.id === s.id);
     sess.entries ??= {};
-    sess.entries[slotId] = { exerciseId: slot.exerciseId, substitution: null, sets: [], barId: sess.entries[slotId]?.barId, note: sess.entries[slotId]?.note };
+    sess.entries[slotId] = { exerciseId: slot.exerciseId, substitution: null, sets: [], barId: sess.entries[slotId]?.barId, note: sess.entries[slotId]?.note, feedback: sess.entries[slotId]?.feedback, painWhere: sess.entries[slotId]?.painWhere };
     sess.updatedAt = store.now();
   });
   closeModal(); render();
@@ -631,6 +657,20 @@ Object.assign(actions, {
     store.mutate((d) => { const ex = L.exerciseOf(d, el.dataset.ex); if (ex) { ex.setup = v; ex.updatedAt = store.now(); } });
     closeModal(); render(); toast("Regolazioni salvate");
   },
+  fb: (el) => {
+    const slotId = el.dataset.slot, k = el.dataset.k;
+    withEntry(slotId, (e) => { e.feedback = L.toggleFeedback(e.feedback, k); });
+    refreshFeedback(slotId);
+    // Turning on "Fastidio" with no zone yet: ask where, unless there are zones to pick from.
+    const where = $(`[data-act=fb-where][data-slot="${slotId}"]`);
+    if (k === "pain" && !where.closest(".fb-where").hidden && !where.value && !$(`[data-act=fb-zone][data-slot="${slotId}"]`)) where.focus();
+  },
+  "fb-zone": (el) => {
+    const where = $(`[data-act=fb-where][data-slot="${el.dataset.slot}"]`);
+    where.value = el.dataset.z;
+    withEntry(el.dataset.slot, (e) => { e.painWhere = el.dataset.z; });
+    refreshFeedback(el.dataset.slot);
+  },
   "note-open": (el) => { noteOpen.add(el.dataset.slot); render(); $(`[data-act=note][data-slot="${el.dataset.slot}"]`)?.focus(); },
   "add-set": (el) => {
     document.activeElement?.blur?.();
@@ -678,6 +718,7 @@ Object.assign(actions, {
 Object.assign(changes, {
   bar: (t) => { withEntry(t.dataset.slot, (e) => { e.barId = t.value; }); updateBarTotal(t.dataset.slot); },
   note: (t) => { withEntry(t.dataset.slot, (e) => { e.note = t.value.trim(); }); },
+  "fb-where": (t) => { withEntry(t.dataset.slot, (e) => { e.painWhere = t.value.trim(); }); },
   variant: (t) => { withEntry(t.dataset.slot, (e) => { e.variant = t.value; }); },
 });
 Object.assign(inputs, { "sub-search": () => renderSubList() });

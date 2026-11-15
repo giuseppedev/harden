@@ -117,6 +117,27 @@ export async function logbookPdf(d, cycle) {
       }
       y = top - blockH - 7;
     });
+    // Feedback and notes: one row per exercise with something to say, in the same week columns as the grid.
+    const fbRows = rows.map((r, idx) => ({ r, idx })).filter(({ r }) => weeks.some((w) => r.feedback[w]));
+    if (fbRows.length) {
+      const title = (more) => { y -= 8; page.drawText(more ? "Feedback e note (segue)" : "Feedback e note", { x: M, y: y - 10, size: 10, font: bold, color: black }); y -= 16; };
+      if (y - 40 < M + 14) newPage();
+      title(false);
+      for (const { r, idx } of fbRows) {
+        const name = wrap(`${idx + 1}. ${exName(d, r.exerciseId)}`, bold, 8, nameW - 12).slice(0, 3);
+        const cells = weeks.map((w) => wrap(r.feedback[w] || "", font, 7, weekW - 8));
+        const h = Math.max(16, name.length * 9.5 + 6, ...cells.map((l) => l.length * 8.5 + 6));
+        if (y - h < M + 14) { newPage(); title(true); }
+        page.drawRectangle({ x: M, y: y - h, width: nameW - 6, height: h, borderColor: black, borderWidth: 0.8 });
+        name.forEach((line, i) => page.drawText(line, { x: M + 5, y: y - 10 - i * 9.5, size: 8, font: bold, color: black }));
+        cells.forEach((lines, w) => {
+          const x = M + nameW + w * weekW;
+          page.drawRectangle({ x, y: y - h, width: weekW, height: h, borderColor: black, borderWidth: 0.8 });
+          lines.forEach((line, i) => page.drawText(line, { x: x + 4, y: y - 9 - i * 8.5, size: 7, font, color: ink }));
+        });
+        y -= h + 4;
+      }
+    }
   }
   stampFooter(doc, font);
   return doc.save();

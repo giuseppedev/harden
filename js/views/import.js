@@ -19,7 +19,7 @@ function saveDraft() {
 export const hasImportDraft = () => !!imp && imp.screen !== "done";
 
 const restText = (s) => (!s ? "–" : s >= 60 ? `${Math.floor(s / 60)}′${s % 60 ? ` ${s % 60}″` : ""}` : `${s}″`);
-const cellText = (b, w) => (b.sets[w] == null ? b.reps[w] || "" : `${b.sets[w]}×${b.reps[w]}`);
+const cellText = (b, w) => (b.sets[w] == null ? b.reps[w] || "" : b.sets[w] === 0 ? "0" : `${b.sets[w]}×${b.reps[w]}`);
 const nextNumber = (d) => Math.max(0, ...store.live(d.cycles).map((c) => c.number)) + 1;
 /**
  * Past periods belong to the cycles already logged: a new cycle starts after the start of the latest cycle and after
@@ -255,8 +255,14 @@ export const importDraftCard = () => (hasImportDraft()
 /** First problem of an exercise, or "" when it can be confirmed. */
 function problem(t) {
   if (!t.x.name.trim()) return "Scrivi il nome dell'esercizio.";
-  for (const b of t.x.blocks) for (let w = 0; w < b.sets.length; w++) {
-    if (!(Number.isInteger(b.sets[w]) && b.sets[w] > 0 && String(b.reps[w]).trim())) return `Settimana ${w + 1}: scrivi serie×ripetizioni, per esempio 3×10.`;
+  // A block can have 0 sets in a week (e.g. only the MAV that week), but each week needs at least one set.
+  const weeks = t.x.blocks[0]?.sets.length || 0;
+  for (let w = 0; w < weeks; w++) {
+    for (const b of t.x.blocks) {
+      if (b.sets[w] === 0) continue;
+      if (!(Number.isInteger(b.sets[w]) && b.sets[w] > 0 && String(b.reps[w]).trim())) return `Settimana ${w + 1}: scrivi serie×ripetizioni, per esempio 3×10, oppure 0 se quella settimana non si fa.`;
+    }
+    if (!t.x.blocks.some((b) => b.sets[w] > 0)) return `Settimana ${w + 1}: serve almeno una serie.`;
   }
   return "";
 }
@@ -333,9 +339,10 @@ Object.assign(inputs, {
   "imp-field": (el) => { current().x[el.dataset.f] = el.value; if (el.matches("textarea")) fit(el); saveDraft(); },
   "imp-cell": (el) => {
     const b = current().x.blocks[+el.dataset.b], w = +el.dataset.w;
-    const m = /^\s*(\d+)\s*[x×*]\s*(\S.*?)\s*$/i.exec(el.value);
-    b.sets[w] = m ? +m[1] : null; b.reps[w] = m ? m[2] : el.value.trim();
-    el.classList.toggle("bad", !m); saveDraft();
+    const zero = /^\s*(0+|[-–—])\s*([x×*].*)?$/i.test(el.value);
+    const m = !zero && /^\s*(\d+)\s*[x×*]\s*(\S.*?)\s*$/i.exec(el.value);
+    b.sets[w] = zero ? 0 : m ? +m[1] : null; b.reps[w] = zero ? "" : m ? m[2] : el.value.trim();
+    el.classList.toggle("bad", !zero && !m); saveDraft();
   },
 });
 
